@@ -1,5 +1,6 @@
 package Histogram;
-use Moose;
+#use Moose;
+use Mouse;
 use namespace::autoclean;
 use Carp;
 use Scalar::Util qw (looks_like_number );
@@ -78,11 +79,11 @@ has n_points => (
                  default => undef,
                 );
 
-has range => ( # min and max numbers in
+has range => (                  # min and max numbers in
               isa => 'ArrayRef[Maybe[Num]]',
               is => 'rw',
               default => sub { [undef, undef] },
-);
+             );
 
 has mean => (
              isa => 'Maybe[Num]',
@@ -114,6 +115,11 @@ has bin_counts => (
                    is => 'rw',
                   );
 
+has bin_centers => (
+                    isa => 'ArrayRef',
+                    is => 'rw',
+                   );
+
 has underflow_count => (
                         isa => 'Num',
                         is => 'rw',
@@ -134,7 +140,7 @@ sub BUILD{
    my $self = shift;
 
    $self->load_data_from_file();
- #  print $self->min_x(), " ", $self->binwidth(), " ", $self->max_x(), "\n";
+   #  print $self->min_x(), " ", $self->binwidth(), " ", $self->max_x(), "\n";
 }
 
 sub load_data_from_file{
@@ -151,7 +157,7 @@ sub load_data_from_file{
       if (looks_like_number( $data_item ) ) {
          
          $integer_data = 0 if(! ($data_item =~ /^[+-]?\d+\z/) );
-     #    print "$data_item $integer_data \n";
+         #    print "$data_item $integer_data \n";
          push @data_array, $data_item;
          #        $self->data_hash()->{$data_item}++;
          $n_data_points++;
@@ -175,7 +181,7 @@ sub load_data_from_file{
    $self->stddev( $stddev );
    $self->stderr( $stderr );
    @data_array = sort {$a <=> $b } @data_array;
-print STDERR join(' ', @data_array), "\n";
+   print STDERR join(' ', @data_array), "\n";
    $self->range( [$data_array[0], $data_array[-1]] );
    if ($n_data_points % 2 == 0) {
       my $mid = int($n_data_points/2);
@@ -191,9 +197,10 @@ print STDERR join(' ', @data_array), "\n";
 sub bin_data{ # populate the bins using existing bin specification (binwidth, etc.)
    my $self = shift;
    my @bin_counts = ();
+   my @bin_centers = ();
    my ($underflow_count, $overflow_count) = (0, 0);
    my ($min_x, $max_x) = ($self->min_x(), $self->max_x());
-#print "datat type: ", $self->data_type(), "\n";
+   #print "datat type: ", $self->data_type(), "\n";
    if ($self->data_type eq 'integer') {
       $min_x -= 0.5;
       $max_x += 0.5;
@@ -205,13 +212,20 @@ sub bin_data{ # populate the bins using existing bin specification (binwidth, et
          $overflow_count++;
       } else {
          my $bin_number = int( ($d - $min_x)/$self->binwidth() );
-#print "$min_x  ", $self->binwidth(), "  $d  $bin_number \n";
+         #print "$min_x  ", $self->binwidth(), "  $d  $bin_number \n";
          $bin_counts[$bin_number]++;
+         $bin_centers[$bin_number] = ($bin_number+0.5)*$self->binwidth()
       }
    }
    $self->bin_counts( \@bin_counts );
+   $self->bin_centers( \@bin_centers );
    $self->underflow_count( $underflow_count );
    $self->overflow_count( $overflow_count );
+}
+
+sub binned_data{
+   my $self = shift;
+   return ($self->bin_centers(), $self->underflow_counts(), $self->bin_counts(), $self->overflow_counts());
 }
 
 sub as_string{
@@ -224,7 +238,7 @@ sub as_string{
    $h_string .= sprintf("#-----------------------------------------------\n");
    $h_string .= sprintf("# bin     min    center       max     count \n");
 
-   for(my ($i, $bin_min_x) = (0, $self->min_x()); $bin_min_x < $self->max_x; $i++, $bin_min_x += $self->binwidth()){
+   for (my ($i, $bin_min_x) = (0, $self->min_x()); $bin_min_x < $self->max_x; $i++, $bin_min_x += $self->binwidth()) {
       my $bin_center_x = $bin_min_x + 0.5*$self->binwidth();
       my $bin_max_x = $bin_min_x + $self->binwidth();
       $h_string .= sprintf("    %9.4g %9.4g %9.4g  %8d\n",
@@ -239,6 +253,8 @@ sub as_string{
                         $self->mean(), $self->stddev(), $self->stderr);
    return $h_string;
 }
+
+
 
 sub auto_bin{                   # automatically choose binwidth, etc.
 
