@@ -141,6 +141,9 @@ sub BUILD{
 
    $self->load_data_from_file();
    #  print $self->min_x(), " ", $self->binwidth(), " ", $self->max_x(), "\n";
+
+   my $n_bins = int( ($self->max_x() - $self->min_x())/$self->binwidth() ) + 1;
+$self->n_bins($n_bins);
 }
 
 sub load_data_from_file{
@@ -181,7 +184,7 @@ sub load_data_from_file{
    $self->stddev( $stddev );
    $self->stderr( $stderr );
    @data_array = sort {$a <=> $b } @data_array;
-   print STDERR join(' ', @data_array), "\n";
+ #  print STDERR join(' ', @data_array), "\n";
    $self->range( [$data_array[0], $data_array[-1]] );
    if ($n_data_points % 2 == 0) {
       my $mid = int($n_data_points/2);
@@ -196,8 +199,8 @@ sub load_data_from_file{
 
 sub bin_data{ # populate the bins using existing bin specification (binwidth, etc.)
    my $self = shift;
-   my @bin_counts = ();
-   my @bin_centers = ();
+   my @bin_counts = (0) x $self->n_bins();
+   my @bin_centers = map( ($_ - 0.5)*$self->binwidth(), (0 .. $self->n_bins() ) );
    my ($underflow_count, $overflow_count) = (0, 0);
    my ($min_x, $max_x) = ($self->min_x(), $self->max_x());
    #print "datat type: ", $self->data_type(), "\n";
@@ -214,7 +217,7 @@ sub bin_data{ # populate the bins using existing bin specification (binwidth, et
          my $bin_number = int( ($d - $min_x)/$self->binwidth() );
          #print "$min_x  ", $self->binwidth(), "  $d  $bin_number \n";
          $bin_counts[$bin_number]++;
-         $bin_centers[$bin_number] = ($bin_number+0.5)*$self->binwidth()
+        # $bin_centers[$bin_number] = ($bin_number+0.5)*$self->binwidth()
       }
    }
    $self->bin_counts( \@bin_counts );
