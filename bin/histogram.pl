@@ -18,11 +18,11 @@ BEGIN {     # this has to go in Begin block so happens at compile time
 }
 use lib $libdir;
 
-use Histogram;
+use Histograms;
 
 {                               # main
    my $input_filename = undef;
-   my $column = undef;
+   my $columns = undef;
    my $min_x = undef;
    my $max_x = undef;
    my $binwidth = undef;
@@ -30,16 +30,19 @@ my $persist = 0;
 
    GetOptions(
               'input_filename=s' => \$input_filename,
-              'column=i' => \$column, # unit based, i.e. left-most column is 1
+              'columns=s' => \$columns, # unit based, i.e. left-most column is 1
               'min_x=f' => \$min_x,
               'max_x=f' => \$max_x,
               'binwidth|width=f' => \$binwidth,
              );
 
-   my $histogram_obj = Histogram->new({
-                                       data_file => $input_filename, data_column => $column, 
+
+print "columns [$columns] \n";
+   my $histogram_obj = Histograms->new({
+                                       data_file => $input_filename, data_columns => $columns, 
                                        min_x => $min_x, max_x => $max_x, binwidth => $binwidth
                                       });
+#print $histogram_obj->min_x(), "  ", $histogram_obj->max_x(), "\n";
 
    $histogram_obj->bin_data();
    my $histogram_as_string = $histogram_obj->as_string;
@@ -47,8 +50,10 @@ print "$histogram_as_string\n";
 
 my $plot = Graphics::GnuplotIF->new( persist => $persist, style => 'histeps');
 $plot->gnuplot_set_xrange($histogram_obj->min_x(), $histogram_obj->max_x());
-my $bin_centers = $histogram_obj->bin_centers();
-my $bin_counts = $histogram_obj->bin_counts();
+my $bin_centers = $histogram_obj->column_hdata()->{pooled}->bin_centers();
+my $bin_counts = $histogram_obj->column_hdata()->{pooled}->bin_counts();
+#print join(", ", @$bin_centers);
+#print join(", ", @$bin_counts);
 $plot->gnuplot_plot_xy($bin_centers, $bin_counts);
 $plot->gnuplot_pause();
 

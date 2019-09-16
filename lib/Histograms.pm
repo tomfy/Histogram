@@ -1,10 +1,14 @@
-package Histogram;
-#use Moose;
-use Mouse;
+package Histograms;
+use strict;
+use warnings;
+use Moose;
+#use Mouse;
 use namespace::autoclean;
 use Carp;
 use Scalar::Util qw (looks_like_number );
 use List::Util qw ( min max sum );
+use POSIX qw ( floor ceil );
+use Hdata; 
 
 #######  which file and column of file to read  #########################
 
@@ -14,11 +18,11 @@ has data_file => (              # the file containing input data.
                   required => 1,
                  );
 
-has data_column => ( # the column (unit based) in which to find the numbers to be histogrammed.
-                    isa => 'Int',
-                    is => 'rw',
-                    required => 1,
-                   );
+has data_columns => ( # the column(s) (unit based) in which to find the numbers to be histogrammed.
+                     isa => 'Str', # e.g. '2,3,4'
+                     is => 'rw',
+                     required => 1,
+                    );
 #########################################################################
 
 
@@ -30,11 +34,13 @@ has data_type => (
                   default => undef,
                  );
 
-has data_array => ( # the numbers to be histogrammed, sorted small to large.
-                   isa => 'ArrayRef',
-                   is => 'rw',
-                   default => sub { [] },
-                  );
+has column_hdata => ( 
+                     # a hashref of Hdata objects, one for each column to be histogrammed,
+                     # plus one for all of them pooled, with key 'pooled'
+                     isa => 'HashRef',
+                     is => 'rw',
+                     default => sub { {} },
+                    );
 
 # has data_hash => ( # needed?
 #              isa => 'HashRef',
@@ -46,88 +52,35 @@ has data_array => ( # the numbers to be histogrammed, sorted small to large.
 ######  binning specifiers ##############################################
 
 has binwidth => (
-                 isa => 'Num',
+                 isa => 'Maybe[Num]',
                  is => 'rw',
                  required => 0,
                 );
 
 has min_x => (
-              isa => 'Num',
+              isa => 'Maybe[Num]',
               is => 'rw',
               required => 0,
              );
 
 has max_x => (
-              isa => 'Num',
+              isa => 'Maybe[Num]',
               is => 'rw',
               required => 0,
              );
 
 has n_bins => (
-               isa => 'Num',
+               isa => 'Maybe[Num]',
                is => 'rw',
                required => 0,
               );
 #########################################################################
 
 
-######  summary statistics (mean, stddev, etc.) #########################
-
-has n_points => (
-                 isa => 'Maybe[Int]',
-                 is => 'rw',
-                 default => undef,
-                );
-
-has range => (                  # min and max numbers in
-              isa => 'ArrayRef[Maybe[Num]]',
-              is => 'rw',
-              default => sub { [undef, undef] },
-             );
-
-has mean => (
-             isa => 'Maybe[Num]',
-             is => 'rw',
-             default => undef,
-            );
-has stddev => (
-               isa => 'Maybe[Num]',
-               is => 'rw',
-               default => undef,
-              );
-has stderr => (
-               isa => 'Maybe[Num]',
-               is => 'rw',
-               default => undef,
-              );
-has median => (
-               isa => 'Maybe[Num]',
-               is => 'rw',
-               default => undef,
-              );
-#########################################################################
 
 
-######  binned data #####################################################
 
-has bin_counts => (
-                   isa => 'ArrayRef',
-                   is => 'rw',
-                  );
 
-has bin_centers => (
-                    isa => 'ArrayRef',
-                    is => 'rw',
-                   );
-
-has underflow_count => (
-                        isa => 'Num',
-                        is => 'rw',
-                       );
-has overflow_count => (
-                       isa => 'Num',
-                       is => 'rw',
-                      );
 
 #########################################################################
 
@@ -142,88 +95,81 @@ sub BUILD{
    $self->load_data_from_file();
    #  print $self->min_x(), " ", $self->binwidth(), " ", $self->max_x(), "\n";
 
+   if (!(defined $self->min_x()  and  defined $self->max_x()  and  defined  $self->binwidth())) {
+      $self->auto_bin();
+   }
+
    my $n_bins = int( ($self->max_x() - $self->min_x())/$self->binwidth() ) + 1;
-$self->n_bins($n_bins);
+   $self->n_bins($n_bins);
+
+   print $self->min_x(), "  ", $self->max_x(), "  ", $self->binwidth(), "  ", $self->n_bins(), "\n";
+
 }
 
 sub load_data_from_file{
    my $self = shift;
-   my @data_array = ();
-   my ($n_data_points, $avg_x, $avg_xsq, $nonnumber_count) = (0, 0, 0, 0);
-   my ($variance, $stddev, $stderr) = (undef, undef, undef);
+
    my $integer_data = 1;
+   my @columns_to_histogram = split(/\s*,\s*|\s+/, $self->data_columns() ); # e.g. '3, 5,6' or '2 4 3'
+   my %column_hdata = map(($_ => Hdata->new()), @columns_to_histogram);
+   $column_hdata{'pooled'} = Hdata->new();
+
    open my $fh_in, "<", $self->{data_file} or die "Couldn't open $self->{data_file} for reading.\n";
    while (my $line = <$fh_in>) {
       next if($line =~ /^\s*#$/); # skip comments
       my @columns = split(/\s+/, $line);
-      my $data_item = $columns[ $self->{data_column}-1 ];
-      if (looks_like_number( $data_item ) ) {
+      for my $the_column (@columns_to_histogram) {
+         my $data_item = $columns[ $the_column - 1 ];
+         if (looks_like_number( $data_item ) ) {
          
-         $integer_data = 0 if(! ($data_item =~ /^[+-]?\d+\z/) );
-         #    print "$data_item $integer_data \n";
-         push @data_array, $data_item;
-         #        $self->data_hash()->{$data_item}++;
-         $n_data_points++;
-         $avg_x += $data_item;
-         $avg_xsq += $data_item**2;
-         
-      } else {
-         $nonnumber_count++;
+            $integer_data = 0 if(! ($data_item =~ /^[+-]?\d+\z/) );
+            #    print "$data_item $integer_data \n";
+            $column_hdata{$the_column}->add_value( $data_item );
+            $column_hdata{'pooled'}->add_value( $data_item );
+         } else {
+          #  $nonnumber_count++;
+         }
       }
    }
    $self->data_type( ($integer_data)? 'integer' : 'float' );
-   $self->n_points( $n_data_points );
-   if ($n_data_points > 0) {
-      $avg_x /= $n_data_points;
-      $variance = $avg_xsq/$n_data_points - $avg_x*$avg_x;
-      $stddev = sqrt($variance);
-      $stderr = $stddev/sqrt($n_data_points);
-   }
 
-   $self->mean( $avg_x );
-   $self->stddev( $stddev );
-   $self->stderr( $stderr );
-   @data_array = sort {$a <=> $b } @data_array;
- #  print STDERR join(' ', @data_array), "\n";
-   $self->range( [$data_array[0], $data_array[-1]] );
-   if ($n_data_points % 2 == 0) {
-      my $mid = int($n_data_points/2);
-      $self->median( 0.5*($data_array[$mid] + $data_array[$mid+1]) );
-   } else {
-      $self->median( $data_array[ int($n_data_points/2) ] );
+   for my $hdata (values %column_hdata) {
+      $hdata->sort_etc();
    }
-
-   
-   $self->data_array( \@data_array );
+   $self->column_hdata( \%column_hdata );
 }
 
 sub bin_data{ # populate the bins using existing bin specification (binwidth, etc.)
    my $self = shift;
-   my @bin_counts = (0) x $self->n_bins();
-   my @bin_centers = map( ($_ - 0.5)*$self->binwidth(), (0 .. $self->n_bins() ) );
-   my ($underflow_count, $overflow_count) = (0, 0);
-   my ($min_x, $max_x) = ($self->min_x(), $self->max_x());
-   #print "datat type: ", $self->data_type(), "\n";
-   if ($self->data_type eq 'integer') {
-      $min_x -= 0.5;
-      $max_x += 0.5;
-   }
-   for my $d (@{$self->data_array()}) {
-      if ($d < $min_x) {
-         $underflow_count++;
-      } elsif ($d >= $max_x) {
-         $overflow_count++;
-      } else {
-         my $bin_number = int( ($d - $min_x)/$self->binwidth() );
-         #print "$min_x  ", $self->binwidth(), "  $d  $bin_number \n";
-         $bin_counts[$bin_number]++;
-        # $bin_centers[$bin_number] = ($bin_number+0.5)*$self->binwidth()
+
+   while (my ($col, $hdata) = each %{$self->column_hdata}) {
+
+      my @bin_counts = (0) x $self->n_bins();
+      my @bin_centers = map( $self->min_x() + ($_ - 0.5)*$self->binwidth(), (0 .. $self->n_bins() ) );
+      my ($underflow_count, $overflow_count) = (0, 0);
+      my ($min_x, $max_x) = ($self->min_x(), $self->max_x());
+      #print "datat type: ", $self->data_type(), "\n";
+      if ($self->data_type eq 'integer') {
+         $min_x -= 0.5;
+         $max_x += 0.5;
       }
+      for my $d (@{$hdata->data_array()}) {
+         if ($d < $min_x) {
+            $underflow_count++;
+         } elsif ($d >= $max_x) {
+            $overflow_count++;
+         } else {
+            my $bin_number = int( ($d - $min_x)/$self->binwidth() );
+            #print "$min_x  ", $self->binwidth(), "  $d  $bin_number \n";
+            $bin_counts[$bin_number]++;
+            # $bin_centers[$bin_number] = ($bin_number+0.5)*$self->binwidth()
+         }
+      }
+      $self->column_hdata()->{$col}->bin_counts( \@bin_counts );
+      $self->column_hdata()->{$col}->bin_centers( \@bin_centers );
+      $self->column_hdata()->{$col}->underflow_count( $underflow_count );
+      $self->column_hdata()->{$col}->overflow_count( $overflow_count );
    }
-   $self->bin_counts( \@bin_counts );
-   $self->bin_centers( \@bin_centers );
-   $self->underflow_count( $underflow_count );
-   $self->overflow_count( $overflow_count );
 }
 
 sub binned_data{
@@ -235,9 +181,9 @@ sub as_string{
    my $self = shift;
    my $h_string = '';           # the histogram as a string
 
-   $h_string .= sprintf("# data from file: %s, column: %3d \n", $self->data_file(), $self->data_column() );
+   $h_string .= sprintf("# data from file: %s, column: %8s \n", $self->data_file(), $self->data_columns() );
    $h_string .= sprintf("#-----------------------------------------------\n");
-   $h_string .= sprintf("     < %6.4g  (underflow)         %8d \n", $self->min_x(), $self->underflow_count() );
+   $h_string .= sprintf("     < %6.4g  (underflow)         %8d \n", $self->min_x(), $self->column_hdata()->{pooled}->underflow_count() );
    $h_string .= sprintf("#-----------------------------------------------\n");
    $h_string .= sprintf("# bin     min    center       max     count \n");
 
@@ -245,22 +191,75 @@ sub as_string{
       my $bin_center_x = $bin_min_x + 0.5*$self->binwidth();
       my $bin_max_x = $bin_min_x + $self->binwidth();
       $h_string .= sprintf("    %9.4g %9.4g %9.4g  %8d\n",
-                           $bin_min_x, $bin_center_x, $bin_max_x, ($self->bin_counts()->[$i] // 0));
+                           $bin_min_x, $bin_center_x, $bin_max_x, ($self->column_hdata()->{pooled}->bin_counts()->[$i] // 0));
    }
    $h_string .= sprintf("#-----------------------------------------------\n");
-   $h_string .= sprintf("     > %6.4g  (overflow)          %8d \n", $self->max_x(), $self->overflow_count() );
+   $h_string .= sprintf("     > %6.4g  (overflow)          %8d \n", $self->max_x(), $self->column_hdata()->{pooled}->overflow_count() );
    $h_string .= sprintf("#-----------------------------------------------\n");
-   $h_string .= sprintf("# n data points: %5d\n", $self->n_points());
-   $h_string .= sprintf("# range: [%9.4g,%9.4g]   median: %9.4g\n", @{$self->range()},  $self->median());
+   $h_string .= sprintf("# n data points: %5d\n", $self->column_hdata()->{pooled}->n_points());
+ #  $h_string .= sprintf("# range: [%9.4g,%9.4g]   median: %9.4g\n", @{$self->range()},  $self->median());
    $h_string .= sprintf("# mean: %9.4g   stddev: %9.4g   stderr: %9.4g\n",
-                        $self->mean(), $self->stddev(), $self->stderr);
+                        $self->column_hdata()->{pooled}->mean(), 
+                        $self->column_hdata()->{pooled}->stddev(), 
+                        $self->column_hdata()->{pooled}->stderr);
    return $h_string;
 }
 
 
 
 sub auto_bin{                   # automatically choose binwidth, etc.
+   my $self = shift;
+
+my $pooled_hdata = $self->column_hdata()->{'pooled'};
+   my @bws = (1.0, 1.25, 2.0, 2.5, 4.0, 5.0, 8.0);
+   my ($x_lo, $x_hi) = ($pooled_hdata->min(), $pooled_hdata->max()); 
+   my $n_points = $pooled_hdata->n_points();
+
+   my $i5 = int(0.05*$n_points);
+   my $i95 = -1*$i5;
+   #   print "i5 i95: $i5  $i95 \n";
+   #my ($v5, $v95) = ($pooled_hdata->data_array()->[$i5], $pooled_hdata->data_array()->[$i95]);
+   my $v5 = $pooled_hdata->data_array()->[$i5];
+   my $v95 = $pooled_hdata->data_array()->[$i95];
+   my $iq1 = int(0.25*$n_points);
+   my $iq3 = $n_points - $iq1 - 1;
+   my $iqr = $pooled_hdata->data_array()->[$iq3] - $pooled_hdata->data_array()->[$iq1];
+   my $FD_bw = 2*$iqr/$n_points**0.3333;
+   my $mid = 0.5*($v5 + $v95);
+   my $v90range = $v95-$v5;
+   my $half_range = 0.5*($v90range * 2);
+   my ($min_x, $max_x) = ($mid - $half_range, $mid + $half_range);
+   $min_x = 0 if($x_lo >= 0  and  $min_x < 0);
+   #print "hr npts: $half_range  $n_points\n";
+   my $binwidth = $FD_bw;       # 4*$half_range/sqrt($n_points);
+   my $bwf = 1.0;
+
+   while ($binwidth >= 10) {
+      $binwidth /= 10;
+      $bwf *= 10;
+   }
+   while ($binwidth < 1) {
+      $binwidth *= 10;
+      $bwf /= 10;
+   }
+
+   for (my $i = @bws-1; $i >= 0; $i--) {
+      my $bw = $bws[$i];
+      if ($bw <= $binwidth) {
+         $binwidth = $bw;
+         last;
+      }
+   }
+   $binwidth *= $bwf;
+
+   $min_x = $binwidth * floor( $min_x / $binwidth );
+   $max_x = $binwidth * ceil( $max_x / $binwidth );
+
+   $self->min_x($min_x);
+   $self->max_x($max_x);
+   $self->binwidth($binwidth);
 
 }
+
 
 1;
