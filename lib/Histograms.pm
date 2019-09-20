@@ -23,6 +23,7 @@ has data_columns => ( # the column(s) (unit based) in which to find the numbers 
                      is => 'rw',
                      required => 1,
                     );
+
 #########################################################################
 
 
@@ -181,24 +182,41 @@ sub as_string{
    my $self = shift;
    my $h_string = '';           # the histogram as a string
 
-   $h_string .= sprintf("# data from file: %s, column: %8s \n", $self->data_file(), $self->data_columns() );
-   $h_string .= sprintf("#-----------------------------------------------\n");
-   $h_string .= sprintf("     < %6.4g  (underflow)         %8d \n", $self->min_x(), $self->column_hdata()->{pooled}->underflow_count() );
-   $h_string .= sprintf("#-----------------------------------------------\n");
+  my @col_specs = @{$self->get_column_specs()};
+  my $horiz_line_string .= sprintf("#----------------------------------------------");
+   for(@col_specs){ $horiz_line_string .= "----------"; } $horiz_line_string .= "\n";
+
+   $h_string .= sprintf("# data from file: %s, columns:   " . "%9s " x (@col_specs+1) . "\n", $self->data_file(), @col_specs, '  pooled' );
+   $h_string .= $horiz_line_string;
+   $h_string .= sprintf("     < %6.4g  (underflow)          ", $self->min_x());
+  for(@col_specs){ $h_string .= sprintf("%9.4g ", $self->column_hdata()->{$_}->underflow_count() // 0); }
+   $h_string .= sprintf("%9.4g \n", $self->column_hdata()->{pooled}->underflow_count() );
+   $h_string .= $horiz_line_string;
    $h_string .= sprintf("# bin     min    center       max     count \n");
 
    for (my ($i, $bin_min_x) = (0, $self->min_x()); $bin_min_x < $self->max_x; $i++, $bin_min_x += $self->binwidth()) {
       my $bin_center_x = $bin_min_x + 0.5*$self->binwidth();
       my $bin_max_x = $bin_min_x + $self->binwidth();
-      $h_string .= sprintf("    %9.4g %9.4g %9.4g  %8d\n",
-                           $bin_min_x, $bin_center_x, $bin_max_x, ($self->column_hdata()->{pooled}->bin_counts()->[$i] // 0));
+      $h_string .= sprintf("    %9.4g %9.4g %9.4g   ", $bin_min_x, $bin_center_x, $bin_max_x);
+      for(@col_specs){ $h_string .= sprintf("%9d ", $self->column_hdata()->{$_}->bin_counts()->[$i] // 0); }
+        $h_string .= sprintf("%9d\n", ($self->column_hdata()->{pooled}->bin_counts()->[$i] // 0));
    }
-   $h_string .= sprintf("#-----------------------------------------------\n");
-   $h_string .= sprintf("     > %6.4g  (overflow)          %8d \n", $self->max_x(), $self->column_hdata()->{pooled}->overflow_count() );
-   $h_string .= sprintf("#-----------------------------------------------\n");
-   $h_string .= sprintf("# n data points: %5d\n", $self->column_hdata()->{pooled}->n_points());
+   $h_string .= $horiz_line_string;
+   $h_string .= sprintf("     > %6.4g   (overflow)          ", $self->max_x());
+   for(@col_specs){ $h_string .= sprintf("%9.4g ", $self->column_hdata()->{$_}->overflow_count() // 0); }
+   $h_string .= sprintf("%9.4g \n", $self->column_hdata()->{pooled}->overflow_count() );
+   $h_string .= $horiz_line_string;
+   
  #  $h_string .= sprintf("# range: [%9.4g,%9.4g]   median: %9.4g\n", @{$self->range()},  $self->median());
-   $h_string .= sprintf("# mean: %9.4g   stddev: %9.4g   stderr: %9.4g\n",
+   for(@col_specs){
+$h_string .= sprintf("# column: %6s  n points: %5d   ", $_, $self->column_hdata()->{$_}->n_points());
+$h_string .= sprintf("mean: %9.4g   stddev: %9.4g   stderr: %9.4g\n",
+                        $self->column_hdata()->{$_}->mean(), 
+                        $self->column_hdata()->{$_}->stddev(), 
+                        $self->column_hdata()->{$_}->stderr);
+}
+   $h_string .= sprintf("# pooled          n points: %5d   ", $self->column_hdata()->{pooled}->n_points());
+   $h_string .= sprintf("mean: %9.4g   stddev: %9.4g   stderr: %9.4g\n",
                         $self->column_hdata()->{pooled}->mean(), 
                         $self->column_hdata()->{pooled}->stddev(), 
                         $self->column_hdata()->{pooled}->stderr);
@@ -261,5 +279,10 @@ my $pooled_hdata = $self->column_hdata()->{'pooled'};
 
 }
 
+sub get_column_specs{
+my $self = shift;
+ my @column_specifiers = split(/\s*,\s*|\s+/, $self->data_columns() ); # e.g. '3, 5,6' or '2 4 3'
+return \@column_specifiers;
+}
 
 1;

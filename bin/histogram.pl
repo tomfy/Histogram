@@ -5,8 +5,6 @@ use Getopt::Long;
 use Graphics::GnuplotIF qw(GnuplotIF);
 use Math::GSL::SF  qw( :all );
 
-
-
 use File::Basename 'dirname';
 use Cwd 'abs_path';
 my ( $bindir, $libdir );
@@ -26,7 +24,7 @@ use Histograms;
    my $min_x = undef;
    my $max_x = undef;
    my $binwidth = undef;
-my $persist = 0;
+my $persist = 1;
 
    GetOptions(
               'input_filename=s' => \$input_filename,
@@ -51,11 +49,22 @@ print "$histogram_as_string\n";
 my $plot = Graphics::GnuplotIF->new( persist => $persist, style => 'histeps');
 $plot->gnuplot_set_xrange($histogram_obj->min_x(), $histogram_obj->max_x());
 my $bin_centers = $histogram_obj->column_hdata()->{pooled}->bin_centers();
-my $bin_counts = $histogram_obj->column_hdata()->{pooled}->bin_counts();
-#print join(", ", @$bin_centers);
-#print join(", ", @$bin_counts);
-$plot->gnuplot_plot_xy($bin_centers, $bin_counts);
-$plot->gnuplot_pause();
+#my $bin_counts = $histogram_obj->column_hdata()->{pooled}->bin_counts();
 
+my @plot_titles = map("col $_", @{$histogram_obj->get_column_specs()} );
+$plot->gnuplot_set_plot_titles(@plot_titles);
+
+my @histo_bin_counts = map($histogram_obj->column_hdata()->{$_}->bin_counts(), @{$histogram_obj->get_column_specs()});
+$plot->gnuplot_plot_xy($bin_centers, @histo_bin_counts); # , $bin_counts);
+# $plot->gnuplot_pause();
+
+   while(1){
+my $key_in = <>;
+chomp $key_in;
+   if($key_in eq 'g'){
+      $plot->gnuplot_cmd('set grid');
+   }
+      $plot->gnuplot_cmd('refresh');
+}
 }                               # end of main
 ###########
