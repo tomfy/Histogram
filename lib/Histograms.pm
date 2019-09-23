@@ -122,7 +122,7 @@ sub load_data_from_file{
       for my $the_column (@columns_to_histogram) {
          my $data_item = $columns[ $the_column - 1 ];
          if (looks_like_number( $data_item ) ) {
-         
+
             $integer_data = 0 if(! ($data_item =~ /^[+-]?\d+\z/) );
             #    print "$data_item $integer_data \n";
             $column_hdata{$the_column}->add_value( $data_item );
@@ -138,6 +138,27 @@ sub load_data_from_file{
       $hdata->sort_etc();
    }
    $self->column_hdata( \%column_hdata );
+}
+
+sub expand_range{
+   my $self = shift;
+   my $factor = shift // 1.2;
+
+   print "before:  ", $self->min_x(), '  ', $self->max_x(), '  ', $self->binwidth(), '  ', $self->n_bins(), "\n";
+   print "expand factor: $factor \n";
+   my $min_x = $self->min_x();
+   my $max_x = $self->max_x();
+   my $mid_x = 0.5*($min_x + $max_x);
+   $min_x = $mid_x - $factor*0.5*($max_x - $min_x);
+   $max_x = $mid_x + $factor*0.5*($max_x - $min_x);
+   $min_x = max($min_x, 0) if($self->column_hdata()->{'pooled'}->min() >= 0); # $self->pooled_hdata()->min
+   my $binwidth = $self->binwidth();
+   $min_x = $binwidth * floor( $min_x / $binwidth );
+   $max_x = $binwidth * ceil( $max_x / $binwidth );
+   $self->min_x( $min_x );
+   $self->max_x( $max_x );
+   $self->n_bins( int( ($self->max_x() - $self->min_x())/$self->binwidth() ) + 1 );
+   print "after:  ", $self->min_x(), '  ', $self->max_x(), '  ', $self->binwidth(), '  ', $self->n_bins(), "\n";
 }
 
 sub bin_data{ # populate the bins using existing bin specification (binwidth, etc.)
