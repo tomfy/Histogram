@@ -21,26 +21,26 @@ use Histograms;
 {                               # main
    my $input_filename = undef;
    my $columns = undef;
-   my $min_x = undef;
-   my $max_x = undef;
+   my $lo_limit = undef;
+   my $hi_limit = undef;
    my $binwidth = undef;
    my $persist = 0;
 
    GetOptions(
               'input_filename=s' => \$input_filename,
               'columns=s' => \$columns, # unit based, i.e. left-most column is 1
-              'min_x=f' => \$min_x,
-              'max_x=f' => \$max_x,
-              'binwidth|width=f' => \$binwidth,
+              'lo_limit=f' => \$lo_limit,
+              'hi_limit=f' => \$hi_limit,
+              'bw|binwidth|width=f' => \$binwidth,
              );
 
 
    print "columns [$columns] \n";
    my $histogram_obj = Histograms->new({
                                         data_file => $input_filename, data_columns => $columns, 
-                                        min_x => $min_x, max_x => $max_x, binwidth => $binwidth
+                                        lo_limit => $lo_limit, hi_limit => $hi_limit, binwidth => $binwidth
                                        });
-   #print $histogram_obj->min_x(), "  ", $histogram_obj->max_x(), "\n";
+   #print $histogram_obj->lo_limit(), "  ", $histogram_obj->hi_limit(), "\n";
    my $plot = Graphics::GnuplotIF->new( persist => $persist, style => 'histeps');
    $histogram_obj->bin_data();
    my $histogram_as_string = plot_the_plot($histogram_obj, $plot);
@@ -50,7 +50,7 @@ use Histograms;
    # print $histogram_obj->as_string, "\n";
 
    # my $plot = Graphics::GnuplotIF->new( persist => $persist, style => 'histeps');
-   # $plot->gnuplot_set_xrange($histogram_obj->min_x(), $histogram_obj->max_x());
+   # $plot->gnuplot_set_xrange($histogram_obj->lo_limit(), $histogram_obj->hi_limit());
    # my $bin_centers = $histogram_obj->column_hdata()->{pooled}->bin_centers();
    # #my $bin_counts = $histogram_obj->column_hdata()->{pooled}->bin_counts();
 
@@ -98,7 +98,7 @@ sub plot_the_plot{
 
  
 #   my $plot_obj = Graphics::GnuplotIF->new( persist => $persist, style => 'histeps');
-   $plot_obj->gnuplot_set_xrange($histogram_obj->min_x(), $histogram_obj->max_x());
+   $plot_obj->gnuplot_set_xrange($histogram_obj->lo_limit(), $histogram_obj->hi_limit());
    my $bin_centers = $histogram_obj->column_hdata()->{pooled}->bin_centers();
    #my $bin_counts = $histogram_obj->column_hdata()->{pooled}->bin_counts();
 

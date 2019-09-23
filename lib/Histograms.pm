@@ -58,13 +58,13 @@ has binwidth => (
                  required => 0,
                 );
 
-has min_x => (
+has lo_limit => ( # low edge of lowest bin
               isa => 'Maybe[Num]',
               is => 'rw',
               required => 0,
              );
 
-has max_x => (
+has hi_limit => ( # high edge of highest bin
               isa => 'Maybe[Num]',
               is => 'rw',
               required => 0,
@@ -94,16 +94,16 @@ sub BUILD{
    my $self = shift;
 
    $self->load_data_from_file();
-   #  print $self->min_x(), " ", $self->binwidth(), " ", $self->max_x(), "\n";
+   #  print $self->lo_limit(), " ", $self->binwidth(), " ", $self->hi_limit(), "\n";
 
-   if (!(defined $self->min_x()  and  defined $self->max_x()  and  defined  $self->binwidth())) {
+   if (!(defined $self->lo_limit()  and  defined $self->hi_limit()  and  defined  $self->binwidth())) {
       $self->auto_bin();
    }
 
-   my $n_bins = int( ($self->max_x() - $self->min_x())/$self->binwidth() ) + 1;
+   my $n_bins = int( ($self->hi_limit() - $self->lo_limit())/$self->binwidth() ) + 1;
    $self->n_bins($n_bins);
 
-   print $self->min_x(), "  ", $self->max_x(), "  ", $self->binwidth(), "  ", $self->n_bins(), "\n";
+   print $self->lo_limit(), "  ", $self->hi_limit(), "  ", $self->binwidth(), "  ", $self->n_bins(), "\n";
 
 }
 
@@ -144,21 +144,20 @@ sub expand_range{
    my $self = shift;
    my $factor = shift // 1.2;
 
-   print "before:  ", $self->min_x(), '  ', $self->max_x(), '  ', $self->binwidth(), '  ', $self->n_bins(), "\n";
+   print "before:  ", $self->lo_limit(), '  ', $self->hi_limit(), '  ', $self->binwidth(), '  ', $self->n_bins(), "\n";
    print "expand factor: $factor \n";
-   my $min_x = $self->min_x();
-   my $max_x = $self->max_x();
-   my $mid_x = 0.5*($min_x + $max_x);
-   $min_x = $mid_x - $factor*0.5*($max_x - $min_x);
-   $max_x = $mid_x + $factor*0.5*($max_x - $min_x);
-   $min_x = max($min_x, 0) if($self->column_hdata()->{'pooled'}->min() >= 0); # $self->pooled_hdata()->min
+   my $mid_x = 0.5*($self->column_hdata()->{'pooled'}->min() + $self->column_hdata()->{'pooled'}->max());
+   my $hrange = $self->hi_limit() - $mid_x;
+   my $lo_limit = $mid_x - $factor*$hrange;
+   my $hi_limit = $mid_x + $factor*$hrange;
+   $lo_limit = max($lo_limit, 0) if($self->column_hdata()->{'pooled'}->min() >= 0); # $self->pooled_hdata()->min
    my $binwidth = $self->binwidth();
-   $min_x = $binwidth * floor( $min_x / $binwidth );
-   $max_x = $binwidth * ceil( $max_x / $binwidth );
-   $self->min_x( $min_x );
-   $self->max_x( $max_x );
-   $self->n_bins( int( ($self->max_x() - $self->min_x())/$self->binwidth() ) + 1 );
-   print "after:  ", $self->min_x(), '  ', $self->max_x(), '  ', $self->binwidth(), '  ', $self->n_bins(), "\n";
+   $lo_limit = $binwidth * floor( $lo_limit / $binwidth );
+   $hi_limit = $binwidth * ceil( $hi_limit / $binwidth );
+   $self->lo_limit( $lo_limit );
+   $self->hi_limit( $hi_limit );
+   $self->n_bins( int( ($self->hi_limit() - $self->lo_limit())/$self->binwidth() ) + 1 );
+   print "after:  ", $self->lo_limit(), '  ', $self->hi_limit(), '  ', $self->binwidth(), '  ', $self->n_bins(), "\n";
 }
 
 sub bin_data{ # populate the bins using existing bin specification (binwidth, etc.)
@@ -167,22 +166,22 @@ sub bin_data{ # populate the bins using existing bin specification (binwidth, et
    while (my ($col, $hdata) = each %{$self->column_hdata}) {
 
       my @bin_counts = (0) x $self->n_bins();
-      my @bin_centers = map( $self->min_x() + ($_ - 0.5)*$self->binwidth(), (0 .. $self->n_bins() ) );
+      my @bin_centers = map( $self->lo_limit() + ($_ - 0.5)*$self->binwidth(), (0 .. $self->n_bins() ) );
       my ($underflow_count, $overflow_count) = (0, 0);
-      my ($min_x, $max_x) = ($self->min_x(), $self->max_x());
+      my ($lo_limit, $hi_limit) = ($self->lo_limit(), $self->hi_limit());
       #print "datat type: ", $self->data_type(), "\n";
       if ($self->data_type eq 'integer') {
-         $min_x -= 0.5;
-         $max_x += 0.5;
+         $lo_limit -= 0.5;
+         $hi_limit += 0.5;
       }
       for my $d (@{$hdata->data_array()}) {
-         if ($d < $min_x) {
+         if ($d < $lo_limit) {
             $underflow_count++;
-         } elsif ($d >= $max_x) {
+         } elsif ($d >= $hi_limit) {
             $overflow_count++;
          } else {
-            my $bin_number = int( ($d - $min_x)/$self->binwidth() );
-            #print "$min_x  ", $self->binwidth(), "  $d  $bin_number \n";
+            my $bin_number = int( ($d - $lo_limit)/$self->binwidth() );
+            #print "$lo_limit  ", $self->binwidth(), "  $d  $bin_number \n";
             $bin_counts[$bin_number]++;
             # $bin_centers[$bin_number] = ($bin_number+0.5)*$self->binwidth()
          }
@@ -209,21 +208,21 @@ sub as_string{
 
    $h_string .= sprintf("# data from file: %s, columns:   " . "%9s " x (@col_specs+1) . "\n", $self->data_file(), @col_specs, '  pooled' );
    $h_string .= $horiz_line_string;
-   $h_string .= sprintf("     < %6.4g  (underflow)          ", $self->min_x());
+   $h_string .= sprintf("     < %6.4g  (underflow)          ", $self->lo_limit());
   for(@col_specs){ $h_string .= sprintf("%9.4g ", $self->column_hdata()->{$_}->underflow_count() // 0); }
    $h_string .= sprintf("%9.4g \n", $self->column_hdata()->{pooled}->underflow_count() );
    $h_string .= $horiz_line_string;
    $h_string .= sprintf("# bin     min    center       max     count \n");
 
-   for (my ($i, $bin_min_x) = (0, $self->min_x()); $bin_min_x < $self->max_x; $i++, $bin_min_x += $self->binwidth()) {
-      my $bin_center_x = $bin_min_x + 0.5*$self->binwidth();
-      my $bin_max_x = $bin_min_x + $self->binwidth();
-      $h_string .= sprintf("    %9.4g %9.4g %9.4g   ", $bin_min_x, $bin_center_x, $bin_max_x);
+   for (my ($i, $bin_lo_limit) = (0, $self->lo_limit()); $bin_lo_limit < $self->hi_limit; $i++, $bin_lo_limit += $self->binwidth()) {
+      my $bin_center_x = $bin_lo_limit + 0.5*$self->binwidth();
+      my $bin_hi_limit = $bin_lo_limit + $self->binwidth();
+      $h_string .= sprintf("    %9.4g %9.4g %9.4g   ", $bin_lo_limit, $bin_center_x, $bin_hi_limit);
       for(@col_specs){ $h_string .= sprintf("%9d ", $self->column_hdata()->{$_}->bin_counts()->[$i] // 0); }
         $h_string .= sprintf("%9d\n", ($self->column_hdata()->{pooled}->bin_counts()->[$i] // 0));
    }
    $h_string .= $horiz_line_string;
-   $h_string .= sprintf("     > %6.4g   (overflow)          ", $self->max_x());
+   $h_string .= sprintf("     > %6.4g   (overflow)          ", $self->hi_limit());
    for(@col_specs){ $h_string .= sprintf("%9.4g ", $self->column_hdata()->{$_}->overflow_count() // 0); }
    $h_string .= sprintf("%9.4g \n", $self->column_hdata()->{pooled}->overflow_count() );
    $h_string .= $horiz_line_string;
@@ -267,8 +266,8 @@ my $pooled_hdata = $self->column_hdata()->{'pooled'};
    my $mid = 0.5*($v5 + $v95);
    my $v90range = $v95-$v5;
    my $half_range = 0.5*($v90range * 2);
-   my ($min_x, $max_x) = ($mid - $half_range, $mid + $half_range);
-   $min_x = 0 if($x_lo >= 0  and  $min_x < 0);
+   my ($lo_limit, $hi_limit) = ($mid - $half_range, $mid + $half_range);
+   $lo_limit = 0 if($x_lo >= 0  and  $lo_limit < 0);
    #print "hr npts: $half_range  $n_points\n";
    my $binwidth = $FD_bw;       # 4*$half_range/sqrt($n_points);
    my $bwf = 1.0;
@@ -291,11 +290,11 @@ my $pooled_hdata = $self->column_hdata()->{'pooled'};
    }
    $binwidth *= $bwf;
 
-   $min_x = $binwidth * floor( $min_x / $binwidth );
-   $max_x = $binwidth * ceil( $max_x / $binwidth );
+   $lo_limit = $binwidth * floor( $lo_limit / $binwidth );
+   $hi_limit = $binwidth * ceil( $hi_limit / $binwidth );
 
-   $self->min_x($min_x);
-   $self->max_x($max_x);
+   $self->lo_limit($lo_limit);
+   $self->hi_limit($hi_limit);
    $self->binwidth($binwidth);
 
 }

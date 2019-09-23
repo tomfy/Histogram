@@ -139,37 +139,4 @@ sub sort_etc{
 }
 
 
-# sub bin_data{ # populate the bins using existing bin specification (binwidth, etc.)
-#    my $self = shift;
-
-#    while(my ($col, $data) = each %{$self->column_dataarray}){
-
-#    my @bin_counts = (0) x $self->n_bins();
-#    my @bin_centers = map( $self->min_x() + ($_ - 0.5)*$self->binwidth(), (0 .. $self->n_bins() ) );
-#    my ($underflow_count, $overflow_count) = (0, 0);
-#    my ($min_x, $max_x) = ($self->min_x(), $self->max_x());
-#    #print "datat type: ", $self->data_type(), "\n";
-#    if ($self->data_type eq 'integer') {
-#       $min_x -= 0.5;
-#       $max_x += 0.5;
-#    }
-#    for my $d (@{$data}) {
-#       if ($d < $min_x) {
-#          $underflow_count++;
-#       } elsif ($d >= $max_x) {
-#          $overflow_count++;
-#       } else {
-#          my $bin_number = int( ($d - $min_x)/$self->binwidth() );
-#          #print "$min_x  ", $self->binwidth(), "  $d  $bin_number \n";
-#          $bin_counts[$bin_number]++;
-#         # $bin_centers[$bin_number] = ($bin_number+0.5)*$self->binwidth()
-#       }
-#    }
-#    $self->column_hdata{$col}->bin_counts( \@bin_counts );
-#    $self->bin_centers( \@bin_centers );
-#    $self->underflow_count( $underflow_count );
-#    $self->overflow_count( $overflow_count );
-# }
-
-
 1;
