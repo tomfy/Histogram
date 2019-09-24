@@ -103,7 +103,7 @@ sub BUILD{
    my $n_bins = int( ($self->hi_limit() - $self->lo_limit())/$self->binwidth() ) + 1;
    $self->n_bins($n_bins);
 
-   print $self->lo_limit(), "  ", $self->hi_limit(), "  ", $self->binwidth(), "  ", $self->n_bins(), "\n";
+   print "In BUILD: ", $self->lo_limit(), "  ", $self->hi_limit(), "  ", $self->binwidth(), "  ", $self->n_bins(), "\n";
 
 }
 
@@ -166,14 +166,15 @@ sub bin_data{ # populate the bins using existing bin specification (binwidth, et
    while (my ($col, $hdata) = each %{$self->column_hdata}) {
 
       my @bin_counts = (0) x $self->n_bins();
-      my @bin_centers = map( $self->lo_limit() + ($_ - 0.5)*$self->binwidth(), (0 .. $self->n_bins() ) );
+      my @bin_centers = map( $self->lo_limit() + ($_ + 0.5)*$self->binwidth(), (0 .. $self->n_bins() ) );
+      print STDERR 'lo_limit: ', $self->lo_limit(), "   bin centers: ", join('  ', @bin_centers), "\n";
       my ($underflow_count, $overflow_count) = (0, 0);
       my ($lo_limit, $hi_limit) = ($self->lo_limit(), $self->hi_limit());
       #print "datat type: ", $self->data_type(), "\n";
-      if ($self->data_type eq 'integer') {
-         $lo_limit -= 0.5;
-         $hi_limit += 0.5;
-      }
+      # if ($self->data_type eq 'integer') {
+      #    $lo_limit -= 0.5;
+      #    $hi_limit += 0.5;
+      # }
       for my $d (@{$hdata->data_array()}) {
          if ($d < $lo_limit) {
             $underflow_count++;
@@ -217,7 +218,10 @@ sub as_string{
    for (my ($i, $bin_lo_limit) = (0, $self->lo_limit()); $bin_lo_limit < $self->hi_limit; $i++, $bin_lo_limit += $self->binwidth()) {
       my $bin_center_x = $bin_lo_limit + 0.5*$self->binwidth();
       my $bin_hi_limit = $bin_lo_limit + $self->binwidth();
-      $h_string .= sprintf("    %9.4g %9.4g %9.4g   ", $bin_lo_limit, $bin_center_x, $bin_hi_limit);
+      $h_string .= sprintf("    %9.4g %9.4g %9.4g %9.4g   ",
+			   $bin_lo_limit, $bin_center_x,
+			   $self->column_hdata()->{pooled}->bin_centers()->[$i],
+			   $bin_hi_limit);
       for(@col_specs){ $h_string .= sprintf("%9d ", $self->column_hdata()->{$_}->bin_counts()->[$i] // 0); }
         $h_string .= sprintf("%9d\n", ($self->column_hdata()->{pooled}->bin_counts()->[$i] // 0));
    }
@@ -254,7 +258,7 @@ my $pooled_hdata = $self->column_hdata()->{'pooled'};
    my $n_points = $pooled_hdata->n_points();
 
    my $i5 = int(0.05*$n_points);
-   my $i95 = -1*$i5;
+   my $i95 = -1*($i5+1);
    #   print "i5 i95: $i5  $i95 \n";
    #my ($v5, $v95) = ($pooled_hdata->data_array()->[$i5], $pooled_hdata->data_array()->[$i95]);
    my $v5 = $pooled_hdata->data_array()->[$i5];
@@ -266,9 +270,11 @@ my $pooled_hdata = $self->column_hdata()->{'pooled'};
    my $mid = 0.5*($v5 + $v95);
    my $v90range = $v95-$v5;
    my $half_range = 0.5*($v90range * 2);
+#   print STDERR "v5 etc.: $v5 $v95
    my ($lo_limit, $hi_limit) = ($mid - $half_range, $mid + $half_range);
    $lo_limit = 0 if($x_lo >= 0  and  $lo_limit < 0);
-   #print "hr npts: $half_range  $n_points\n";
+   
+   # print "hr npts: $half_range  $n_points\n";
    my $binwidth = $FD_bw;       # 4*$half_range/sqrt($n_points);
    my $bwf = 1.0;
 
@@ -292,6 +298,11 @@ my $pooled_hdata = $self->column_hdata()->{'pooled'};
 
    $lo_limit = $binwidth * floor( $lo_limit / $binwidth );
    $hi_limit = $binwidth * ceil( $hi_limit / $binwidth );
+  if($self->data_type() eq 'integer'){
+    $lo_limit -= 0.5;
+    $hi_limit += 0.5;
+   }
+   print STDERR "in auto bin: $lo_limit  $hi_limit  $binwidth \n";
 
    $self->lo_limit($lo_limit);
    $self->hi_limit($hi_limit);
