@@ -146,8 +146,9 @@ sub expand_range{
 
    print "before:  ", $self->lo_limit(), '  ', $self->hi_limit(), '  ', $self->binwidth(), '  ', $self->n_bins(), "\n";
    print "expand factor: $factor \n";
-   my $mid_x = 0.5*($self->column_hdata()->{'pooled'}->min() + $self->column_hdata()->{'pooled'}->max());
+   my $mid_x = 0.5*($self->lo_limit() + $self->hi_limit());
    my $hrange = $self->hi_limit() - $mid_x;
+   print STDERR "ABC: ", $self->hi_limit(), "  ", $mid_x, "\n";
    my $lo_limit = $mid_x - $factor*$hrange;
    my $hi_limit = $mid_x + $factor*$hrange;
    $lo_limit = max($lo_limit, 0) if($self->column_hdata()->{'pooled'}->min() >= 0); # $self->pooled_hdata()->min
@@ -167,7 +168,7 @@ sub bin_data{ # populate the bins using existing bin specification (binwidth, et
 
       my @bin_counts = (0) x $self->n_bins();
       my @bin_centers = map( $self->lo_limit() + ($_ + 0.5)*$self->binwidth(), (0 .. $self->n_bins() ) );
-      print STDERR 'lo_limit: ', $self->lo_limit(), "   bin centers: ", join('  ', @bin_centers), "\n";
+ #     print STDERR 'lo_limit: ', $self->lo_limit(), "   bin centers: ", join('  ', @bin_centers), "\n";
       my ($underflow_count, $overflow_count) = (0, 0);
       my ($lo_limit, $hi_limit) = ($self->lo_limit(), $self->hi_limit());
       #print "datat type: ", $self->data_type(), "\n";
@@ -215,12 +216,11 @@ sub as_string{
    $h_string .= $horiz_line_string;
    $h_string .= sprintf("# bin     min    center       max     count \n");
 
-   for (my ($i, $bin_lo_limit) = (0, $self->lo_limit()); $bin_lo_limit < $self->hi_limit; $i++, $bin_lo_limit += $self->binwidth()) {
-      my $bin_center_x = $bin_lo_limit + 0.5*$self->binwidth();
-      my $bin_hi_limit = $bin_lo_limit + $self->binwidth();
-      $h_string .= sprintf("    %9.4g %9.4g %9.4g %9.4g   ",
+     while (my ($i, $bin_center_x) = each @{$self->column_hdata()->{pooled}->bin_centers()} ){
+       my $bin_lo_limit = $bin_center_x - 0.5*$self->binwidth();
+      my $bin_hi_limit = $bin_center_x + 0.5*$self->binwidth();
+      $h_string .= sprintf("    %9.4g %9.4g %9.4g   ",
 			   $bin_lo_limit, $bin_center_x,
-			   $self->column_hdata()->{pooled}->bin_centers()->[$i],
 			   $bin_hi_limit);
       for(@col_specs){ $h_string .= sprintf("%9d ", $self->column_hdata()->{$_}->bin_counts()->[$i] // 0); }
         $h_string .= sprintf("%9d\n", ($self->column_hdata()->{pooled}->bin_counts()->[$i] // 0));
