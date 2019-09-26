@@ -25,6 +25,7 @@ use Histograms;
    my $hi_limit = undef;
    my $binwidth = undef;
    my $persist = 0;
+   my $do_plot = 1;
 
    GetOptions(
               'input_filename=s' => \$input_filename,
@@ -32,7 +33,8 @@ use Histograms;
               'lo_limit=f' => \$lo_limit,
               'hi_limit=f' => \$hi_limit,
               'bw|binwidth|width=f' => \$binwidth,
-             );
+	      'plot!' => \$do_plot, # -noplot to suppress plot - just see histogram as text.
+	     );
 
 
    print "columns [$columns] \n";
@@ -43,8 +45,11 @@ use Histograms;
    #print $histogram_obj->lo_limit(), "  ", $histogram_obj->hi_limit(), "\n";
    my $plot = Graphics::GnuplotIF->new( persist => $persist, style => 'histeps');
    $histogram_obj->bin_data();
-   my $histogram_as_string = plot_the_plot($histogram_obj, $plot);
+   my $histogram_as_string = $histogram_obj->as_string();
    print "$histogram_as_string \n";
+
+   plot_the_plot($histogram_obj, $plot) if($do_plot);
+
 
    # $histogram_obj->bin_data();
    # print $histogram_obj->as_string, "\n";
@@ -68,8 +73,10 @@ use Histograms;
       if ($cmd_param =~ s/^\s*(\S+)\s*//) {
          my $cmd = $1;
          my $param = ($cmd_param =~ (/\s*(\S+)\s*/))? $1 : undef;
-        print "[$cmd] [", $param // 'undef', "]\n";
-         if ($cmd eq 'g') {
+	 print "[$cmd] [", $param // 'undef', "]\n";
+	 if($cmd eq 'p'){
+	   plot_the_plot($histogram_obj, $plot);
+	 }elsif ($cmd eq 'g') {
             $plot->gnuplot_cmd('set grid');
             $plot->gnuplot_cmd('refresh');
          } elsif ($cmd eq 'q') {
@@ -82,7 +89,8 @@ use Histograms;
          } elsif ($cmd eq 'x') {
             $histogram_obj->expand_range($param);
             $histogram_obj->bin_data();
-            my $new_h_string = plot_the_plot($histogram_obj, $plot);
+           # my $new_h_string =
+	    plot_the_plot($histogram_obj, $plot);
          }
       }
 
@@ -107,5 +115,5 @@ sub plot_the_plot{
 
    my @histo_bin_counts = map($histogram_obj->column_hdata()->{$_}->bin_counts(), @{$histogram_obj->get_column_specs()});
    $plot_obj->gnuplot_plot_xy($bin_centers, @histo_bin_counts); # , $bin_counts);
-   return $histogram_obj->as_string();
+  
 }
