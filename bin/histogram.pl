@@ -31,7 +31,7 @@ use Histograms;
    GetOptions(
               'input_filename=s' => \$input_filename,
               'columns=s' => \$columns, # unit based, i.e. left-most column is 1
-              'lo_limit=f' => \$lo_limit,
+              'low_limit=f' => \$lo_limit,
               'hi_limit=f' => \$hi_limit,
               'bw|binwidth|width=f' => \$binwidth,
 	      'plot!' => \$do_plot, # -noplot to suppress plot - just see histogram as text.
@@ -72,11 +72,11 @@ use Histograms;
    while (1) {
       my $cmd_param = <>; # command and optionally a parameter, e.g. 'x 0.8'
       chomp $cmd_param;
-      print "[$cmd_param]\n";
+  #    print "[$cmd_param]\n";
       if ($cmd_param =~ s/^\s*(\S+)\s*//) {
          my $cmd = $1;
          my $param = ($cmd_param =~ (/\s*(\S+)\s*/))? $1 : undef;
-	 print "[$cmd] [", $param // 'undef', "]\n";
+#	 print "[$cmd] [", $param // 'undef', "]\n";
 	 if ($cmd eq 'p') {
             plot_the_plot($histogram_obj, $plot);
 	 } elsif ($cmd eq 'g') {
@@ -84,21 +84,19 @@ use Histograms;
             $plot->gnuplot_cmd('refresh');
          } elsif ($cmd eq 'q') {
             last;
-         } elsif ($cmd eq 'logy') { #doesn't work.
+         } elsif ($cmd eq 'logy') {
             $plot->gnuplot_cmd('set log y');
             plot_the_plot($histogram_obj, $plot);
          #   $plot->gnuplot_cmd('refresh');
-         } elsif ($cmd eq 'r') {
+         } elsif ($cmd eq 'refresh') {
             $plot->gnuplot_cmd('refresh');
          } elsif ($cmd eq 'x') {
             $histogram_obj->expand_range($param);
             $histogram_obj->bin_data();
-            # my $new_h_string =
 	    plot_the_plot($histogram_obj, $plot);
          } elsif ($cmd eq 'bw') {
-            $histogram_obj->adjust_binwidth($param);
+            $histogram_obj->set_binwidth($param);
             $histogram_obj->bin_data();
-            # my $new_h_string =
 	    plot_the_plot($histogram_obj, $plot);
          } elsif ($cmd eq 'lo') {
             $histogram_obj->change_range($param, undef);
@@ -106,7 +104,15 @@ use Histograms;
          } elsif ($cmd eq 'hi') {
             $histogram_obj->change_range(undef, $param);
             plot_the_plot($histogram_obj, $plot);
-         }
+	  } elsif ($cmd eq 'c'){
+	    $histogram_obj->change_binwidth($param);
+	    $histogram_obj->bin_data();
+	    plot_the_plot($histogram_obj, $plot);
+	  } elsif ($cmd eq 'r'){
+	    $histogram_obj->change_binwidth($param? -1*$param : -1);
+	    $histogram_obj->bin_data();
+	    plot_the_plot($histogram_obj, $plot);
+	  }
       }
 
    }
