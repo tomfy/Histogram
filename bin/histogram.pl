@@ -26,6 +26,7 @@ use Histograms;
    my $binwidth = undef;
    my $persist = 0;
    my $do_plot = 1;
+   my $log_y = 0;
 
    GetOptions(
               'input_filename=s' => \$input_filename,
@@ -34,6 +35,7 @@ use Histograms;
               'hi_limit=f' => \$hi_limit,
               'bw|binwidth|width=f' => \$binwidth,
 	      'plot!' => \$do_plot, # -noplot to suppress plot - just see histogram as text.
+              'logy!' => \$log_y,
 	     );
 
 
@@ -48,6 +50,7 @@ use Histograms;
    my $histogram_as_string = $histogram_obj->as_string();
    print "$histogram_as_string \n";
 
+   $plot->gnuplot_cmd('set log y') if($log_y);
    plot_the_plot($histogram_obj, $plot) if($do_plot);
 
 
@@ -74,23 +77,35 @@ use Histograms;
          my $cmd = $1;
          my $param = ($cmd_param =~ (/\s*(\S+)\s*/))? $1 : undef;
 	 print "[$cmd] [", $param // 'undef', "]\n";
-	 if($cmd eq 'p'){
-	   plot_the_plot($histogram_obj, $plot);
-	 }elsif ($cmd eq 'g') {
+	 if ($cmd eq 'p') {
+            plot_the_plot($histogram_obj, $plot);
+	 } elsif ($cmd eq 'g') {
             $plot->gnuplot_cmd('set grid');
             $plot->gnuplot_cmd('refresh');
          } elsif ($cmd eq 'q') {
             last;
-         } elsif ($cmd eq 'logy'){ #doesn't work.
+         } elsif ($cmd eq 'logy') { #doesn't work.
             $plot->gnuplot_cmd('set log y');
-            $plot->gnuplot_cmd('refresh');
-}elsif($cmd eq 'r') {
+            plot_the_plot($histogram_obj, $plot);
+         #   $plot->gnuplot_cmd('refresh');
+         } elsif ($cmd eq 'r') {
             $plot->gnuplot_cmd('refresh');
          } elsif ($cmd eq 'x') {
             $histogram_obj->expand_range($param);
             $histogram_obj->bin_data();
-           # my $new_h_string =
+            # my $new_h_string =
 	    plot_the_plot($histogram_obj, $plot);
+         } elsif ($cmd eq 'bw') {
+            $histogram_obj->adjust_binwidth($param);
+            $histogram_obj->bin_data();
+            # my $new_h_string =
+	    plot_the_plot($histogram_obj, $plot);
+         } elsif ($cmd eq 'lo') {
+            $histogram_obj->change_range($param, undef);
+            plot_the_plot($histogram_obj, $plot);
+         } elsif ($cmd eq 'hi') {
+            $histogram_obj->change_range(undef, $param);
+            plot_the_plot($histogram_obj, $plot);
          }
       }
 

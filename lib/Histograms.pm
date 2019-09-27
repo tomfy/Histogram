@@ -58,17 +58,17 @@ has binwidth => (
                  required => 0,
                 );
 
-has lo_limit => ( # low edge of lowest bin
-              isa => 'Maybe[Num]',
-              is => 'rw',
-              required => 0,
-             );
+has lo_limit => (               # low edge of lowest bin
+                 isa => 'Maybe[Num]',
+                 is => 'rw',
+                 required => 0,
+                );
 
-has hi_limit => ( # high edge of highest bin
-              isa => 'Maybe[Num]',
-              is => 'rw',
-              required => 0,
-             );
+has hi_limit => (               # high edge of highest bin
+                 isa => 'Maybe[Num]',
+                 is => 'rw',
+                 required => 0,
+                );
 
 has n_bins => (
                isa => 'Maybe[Num]',
@@ -128,7 +128,7 @@ sub load_data_from_file{
             $column_hdata{$the_column}->add_value( $data_item );
             $column_hdata{'pooled'}->add_value( $data_item );
          } else {
-          #  $nonnumber_count++;
+            #  $nonnumber_count++;
          }
       }
    }
@@ -140,15 +140,87 @@ sub load_data_from_file{
    $self->column_hdata( \%column_hdata );
 }
 
+######## defining the binning #########
+
+sub auto_bin{                   # automatically choose binwidth, etc.
+   my $self = shift;
+
+   my $pooled_hdata = $self->column_hdata()->{'pooled'};
+   my @bws = (1.0, 1.25, 2.0, 2.5, 4.0, 5.0, 8.0);
+   my ($x_lo, $x_hi) = ($pooled_hdata->min(), $pooled_hdata->max()); 
+   my $n_points = $pooled_hdata->n_points();
+
+   my $i5 = int(0.05*$n_points);
+   my $i95 = -1*($i5+1);
+   #   print "i5 i95: $i5  $i95 \n";
+   #my ($v5, $v95) = ($pooled_hdata->data_array()->[$i5], $pooled_hdata->data_array()->[$i95]);
+   my $v5 = $pooled_hdata->data_array()->[$i5];
+   my $v95 = $pooled_hdata->data_array()->[$i95];
+   my $iq1 = int(0.25*$n_points);
+   my $iq3 = $n_points - $iq1 - 1;
+   my $iqr = $pooled_hdata->data_array()->[$iq3] - $pooled_hdata->data_array()->[$iq1];
+   my $FD_bw = 2*$iqr/$n_points**0.3333;
+   my $mid = 0.5*($v5 + $v95);
+   my $v90range = $v95-$v5;
+   my $half_range = 0.5*($v90range * 2);
+   #   print STDERR "v5 etc.: $v5 $v95
+   my ($lo_limit, $hi_limit) = ($mid - $half_range, $mid + $half_range);
+   $lo_limit = 0 if($x_lo >= 0  and  $lo_limit < 0);
+   
+   # print "hr npts: $half_range  $n_points\n";
+   my $binwidth = $FD_bw;       # 4*$half_range/sqrt($n_points);
+   my $bwf = 1.0;
+
+   while ($binwidth >= 10) {
+      $binwidth /= 10;
+      $bwf *= 10;
+   }
+   while ($binwidth < 1) {
+      $binwidth *= 10;
+      $bwf /= 10;
+   }
+
+   for (my $i = @bws-1; $i >= 0; $i--) {
+      my $bw = $bws[$i];
+      if ($bw <= $binwidth) {
+         $binwidth = $bw;
+         last;
+      }
+   }
+   $binwidth *= $bwf;
+
+   $lo_limit = $binwidth * floor( $lo_limit / $binwidth );
+   $hi_limit = $binwidth * ceil( $hi_limit / $binwidth );
+   if ($self->data_type() eq 'integer') {
+      $lo_limit -= 0.5;
+      $hi_limit += 0.5;
+   }
+   print STDERR "in auto bin: $lo_limit  $hi_limit  $binwidth \n";
+
+   $self->lo_limit($lo_limit);
+   $self->hi_limit($hi_limit);
+   $self->binwidth($binwidth);
+}
+
+sub change_range{
+   my $self = shift;
+   my $new_lo = shift // undef;
+   my $new_hi = shift // undef;
+#   print STDERR "new_lo, new_hi:  ", $new_lo // 'undef', "  ", $new_hi // 'undef', "\n";
+   $self->lo_limit($new_lo) if(defined $new_lo);
+   $self->hi_limit($new_hi) if(defined $new_hi);
+   $self->set_binwidth($self->binwidth());
+}
+
 sub expand_range{
    my $self = shift;
    my $factor = shift // 1.2;
 
-   print "before:  ", $self->lo_limit(), '  ', $self->hi_limit(), '  ', $self->binwidth(), '  ', $self->n_bins(), "\n";
-   print "expand factor: $factor \n";
+#   print "before:  ", $self->lo_limit(), '  ', $self->hi_limit(), '  ', $self->binwidth(), '  ', $self->n_bins(), "\n";
+#   print "expand factor: $factor \n";
    my $mid_x = 0.5*($self->lo_limit() + $self->hi_limit());
    my $hrange = $self->hi_limit() - $mid_x;
-   print STDERR "ABC: ", $self->hi_limit(), "  ", $mid_x, "\n";
+#   print STDERR "ABC: ", $self->hi_limit(), "  ", $mid_x, "\n";
    my $lo_limit = $mid_x - $factor*$hrange;
    my $hi_limit = $mid_x + $factor*$hrange;
    $lo_limit = max($lo_limit, 0) if($self->column_hdata()->{'pooled'}->min() >= 0); # $self->pooled_hdata()->min
@@ -161,6 +233,24 @@ sub expand_range{
    print "after:  ", $self->lo_limit(), '  ', $self->hi_limit(), '  ', $self->binwidth(), '  ', $self->n_bins(), "\n";
 }
 
+sub set_binwidth{ # set the binwidth and adjust the lo and hi limits to be multiples of binwidth; set n_bins accordingly.
+   my $self = shift;
+   my $new_bw = shift;
+   my ($lo_limit, $hi_limit) = ($self->lo_limit(), $self->hi_limit());
+   $lo_limit = $new_bw * floor( $lo_limit / $new_bw );
+   $hi_limit = $new_bw * ceil( $hi_limit / $new_bw );
+   if ($self->data_type() eq 'integer') {
+      $lo_limit -= 0.5;
+      $hi_limit += 0.5;
+   }
+   print STDERR "in auto bin: $lo_limit  $hi_limit  $new_bw \n";
+
+   $self->lo_limit($lo_limit);
+   $self->hi_limit($hi_limit);
+   $self->binwidth($new_bw);
+   $self->n_bins( int( ($self->hi_limit() - $self->lo_limit())/$self->binwidth() ) + 1 );
+}
+
 sub bin_data{ # populate the bins using existing bin specification (binwidth, etc.)
    my $self = shift;
 
@@ -168,7 +258,7 @@ sub bin_data{ # populate the bins using existing bin specification (binwidth, et
 
       my @bin_counts = (0) x $self->n_bins();
       my @bin_centers = map( $self->lo_limit() + ($_ + 0.5)*$self->binwidth(), (0 .. $self->n_bins() ) );
- #     print STDERR 'lo_limit: ', $self->lo_limit(), "   bin centers: ", join('  ', @bin_centers), "\n";
+      #     print STDERR 'lo_limit: ', $self->lo_limit(), "   bin centers: ", join('  ', @bin_centers), "\n";
       my ($underflow_count, $overflow_count) = (0, 0);
       my ($lo_limit, $hi_limit) = ($self->lo_limit(), $self->hi_limit());
       #print "datat type: ", $self->data_type(), "\n";
@@ -204,41 +294,50 @@ sub as_string{
    my $self = shift;
    my $h_string = '';           # the histogram as a string
 
-  my @col_specs = @{$self->get_column_specs()};
-  my $horiz_line_string .= sprintf("#----------------------------------------------");
-   for(@col_specs){ $horiz_line_string .= "----------"; } $horiz_line_string .= "\n";
+   my @col_specs = @{$self->get_column_specs()};
+   my $horiz_line_string .= sprintf("#----------------------------------------------");
+   for (@col_specs) {
+      $horiz_line_string .= "----------";
+   }
+   $horiz_line_string .= "\n";
 
    $h_string .= sprintf("# data from file: %s, columns:   " . "%9s " x (@col_specs+1) . "\n", $self->data_file(), @col_specs, '  pooled' );
    $h_string .= $horiz_line_string;
    $h_string .= sprintf("     < %6.4g  (underflow)          ", $self->lo_limit());
-  for(@col_specs){ $h_string .= sprintf("%9.4g ", $self->column_hdata()->{$_}->underflow_count() // 0); }
+   for (@col_specs) {
+      $h_string .= sprintf("%9.4g ", $self->column_hdata()->{$_}->underflow_count() // 0);
+   }
    $h_string .= sprintf("%9.4g \n", $self->column_hdata()->{pooled}->underflow_count() );
    $h_string .= $horiz_line_string;
    $h_string .= sprintf("# bin     min    center       max     count \n");
 
-     while (my ($i, $bin_center_x) = each @{$self->column_hdata()->{pooled}->bin_centers()} ){
-       my $bin_lo_limit = $bin_center_x - 0.5*$self->binwidth();
+   while (my ($i, $bin_center_x) = each @{$self->column_hdata()->{pooled}->bin_centers()} ) {
+      my $bin_lo_limit = $bin_center_x - 0.5*$self->binwidth();
       my $bin_hi_limit = $bin_center_x + 0.5*$self->binwidth();
       $h_string .= sprintf("    %9.4g %9.4g %9.4g   ",
 			   $bin_lo_limit, $bin_center_x,
 			   $bin_hi_limit);
-      for(@col_specs){ $h_string .= sprintf("%9d ", $self->column_hdata()->{$_}->bin_counts()->[$i] // 0); }
-        $h_string .= sprintf("%9d\n", ($self->column_hdata()->{pooled}->bin_counts()->[$i] // 0));
+      for (@col_specs) {
+         $h_string .= sprintf("%9d ", $self->column_hdata()->{$_}->bin_counts()->[$i] // 0);
+      }
+      $h_string .= sprintf("%9d\n", ($self->column_hdata()->{pooled}->bin_counts()->[$i] // 0));
    }
    $h_string .= $horiz_line_string;
    $h_string .= sprintf("     > %6.4g   (overflow)          ", $self->hi_limit());
-   for(@col_specs){ $h_string .= sprintf("%9.4g ", $self->column_hdata()->{$_}->overflow_count() // 0); }
+   for (@col_specs) {
+      $h_string .= sprintf("%9.4g ", $self->column_hdata()->{$_}->overflow_count() // 0);
+   }
    $h_string .= sprintf("%9.4g \n", $self->column_hdata()->{pooled}->overflow_count() );
    $h_string .= $horiz_line_string;
    
- #  $h_string .= sprintf("# range: [%9.4g,%9.4g]   median: %9.4g\n", @{$self->range()},  $self->median());
-   for(@col_specs){
-$h_string .= sprintf("# column: %6s  n points: %5d   ", $_, $self->column_hdata()->{$_}->n_points());
-$h_string .= sprintf("mean: %9.4g   stddev: %9.4g   stderr: %9.4g\n",
-                        $self->column_hdata()->{$_}->mean(), 
-                        $self->column_hdata()->{$_}->stddev(), 
-                        $self->column_hdata()->{$_}->stderr);
-}
+   #  $h_string .= sprintf("# range: [%9.4g,%9.4g]   median: %9.4g\n", @{$self->range()},  $self->median());
+   for (@col_specs) {
+      $h_string .= sprintf("# column: %6s  n points: %5d   ", $_, $self->column_hdata()->{$_}->n_points());
+      $h_string .= sprintf("mean: %9.4g   stddev: %9.4g   stderr: %9.4g\n",
+                           $self->column_hdata()->{$_}->mean(), 
+                           $self->column_hdata()->{$_}->stddev(), 
+                           $self->column_hdata()->{$_}->stderr);
+   }
    $h_string .= sprintf("# pooled          n points: %5d   ", $self->column_hdata()->{pooled}->n_points());
    $h_string .= sprintf("mean: %9.4g   stddev: %9.4g   stderr: %9.4g\n",
                         $self->column_hdata()->{pooled}->mean(), 
@@ -249,71 +348,10 @@ $h_string .= sprintf("mean: %9.4g   stddev: %9.4g   stderr: %9.4g\n",
 
 
 
-sub auto_bin{                   # automatically choose binwidth, etc.
-   my $self = shift;
-
-my $pooled_hdata = $self->column_hdata()->{'pooled'};
-   my @bws = (1.0, 1.25, 2.0, 2.5, 4.0, 5.0, 8.0);
-   my ($x_lo, $x_hi) = ($pooled_hdata->min(), $pooled_hdata->max()); 
-   my $n_points = $pooled_hdata->n_points();
-
-   my $i5 = int(0.05*$n_points);
-   my $i95 = -1*($i5+1);
-   #   print "i5 i95: $i5  $i95 \n";
-   #my ($v5, $v95) = ($pooled_hdata->data_array()->[$i5], $pooled_hdata->data_array()->[$i95]);
-   my $v5 = $pooled_hdata->data_array()->[$i5];
-   my $v95 = $pooled_hdata->data_array()->[$i95];
-   my $iq1 = int(0.25*$n_points);
-   my $iq3 = $n_points - $iq1 - 1;
-   my $iqr = $pooled_hdata->data_array()->[$iq3] - $pooled_hdata->data_array()->[$iq1];
-   my $FD_bw = 2*$iqr/$n_points**0.3333;
-   my $mid = 0.5*($v5 + $v95);
-   my $v90range = $v95-$v5;
-   my $half_range = 0.5*($v90range * 2);
-#   print STDERR "v5 etc.: $v5 $v95
-   my ($lo_limit, $hi_limit) = ($mid - $half_range, $mid + $half_range);
-   $lo_limit = 0 if($x_lo >= 0  and  $lo_limit < 0);
-   
-   # print "hr npts: $half_range  $n_points\n";
-   my $binwidth = $FD_bw;       # 4*$half_range/sqrt($n_points);
-   my $bwf = 1.0;
-
-   while ($binwidth >= 10) {
-      $binwidth /= 10;
-      $bwf *= 10;
-   }
-   while ($binwidth < 1) {
-      $binwidth *= 10;
-      $bwf /= 10;
-   }
-
-   for (my $i = @bws-1; $i >= 0; $i--) {
-      my $bw = $bws[$i];
-      if ($bw <= $binwidth) {
-         $binwidth = $bw;
-         last;
-      }
-   }
-   $binwidth *= $bwf;
-
-   $lo_limit = $binwidth * floor( $lo_limit / $binwidth );
-   $hi_limit = $binwidth * ceil( $hi_limit / $binwidth );
-  if($self->data_type() eq 'integer'){
-    $lo_limit -= 0.5;
-    $hi_limit += 0.5;
-   }
-   print STDERR "in auto bin: $lo_limit  $hi_limit  $binwidth \n";
-
-   $self->lo_limit($lo_limit);
-   $self->hi_limit($hi_limit);
-   $self->binwidth($binwidth);
-
-}
-
 sub get_column_specs{
-my $self = shift;
- my @column_specifiers = split(/\s*,\s*|\s+/, $self->data_columns() ); # e.g. '3, 5,6' or '2 4 3'
-return \@column_specifiers;
+   my $self = shift;
+   my @column_specifiers = split(/\s*,\s*|\s+/, $self->data_columns() ); # e.g. '3, 5,6' or '2 4 3'
+   return \@column_specifiers;
 }
 
 1;
