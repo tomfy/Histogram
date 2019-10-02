@@ -49,29 +49,16 @@ use Histograms;
    $histogram_obj->bin_data();
    my $histogram_as_string = $histogram_obj->as_string();
    print "$histogram_as_string \n";
-
-   $plot->gnuplot_cmd('set log y') if($log_y);
+   if ($log_y) {
+     $plot->gnuplot_cmd('set log y');
+     $plot->gnuplot_set_yrange(0.8, '*');
+   }
    plot_the_plot($histogram_obj, $plot) if($do_plot);
 
-
-   # $histogram_obj->bin_data();
-   # print $histogram_obj->as_string, "\n";
-
-   # my $plot = Graphics::GnuplotIF->new( persist => $persist, style => 'histeps');
-   # $plot->gnuplot_set_xrange($histogram_obj->lo_limit(), $histogram_obj->hi_limit());
-   # my $bin_centers = $histogram_obj->column_hdata()->{pooled}->bin_centers();
-   # #my $bin_counts = $histogram_obj->column_hdata()->{pooled}->bin_counts();
-
-   # my @plot_titles = map("col $_", @{$histogram_obj->get_column_specs()} );
-   # $plot->gnuplot_set_plot_titles(@plot_titles);
-
-   # my @histo_bin_counts = map($histogram_obj->column_hdata()->{$_}->bin_counts(), @{$histogram_obj->get_column_specs()});
-   # $plot->gnuplot_plot_xy($bin_centers, @histo_bin_counts); # , $bin_counts);
-   # # $plot->gnuplot_pause();
-
+   #####  modify plot in response to keyboard commands: #####
    while (1) {
-      my $cmd_param = <>; # command and optionally a parameter, e.g. 'x 0.8'
-      chomp $cmd_param;
+     my $cmd_param = <>; # command and optionally a parameter, e.g. 'x 0.8'
+     chomp $cmd_param;
   #    print "[$cmd_param]\n";
       if ($cmd_param =~ s/^\s*(\S+)\s*//) {
          my $cmd = $1;
@@ -80,12 +67,21 @@ use Histograms;
 	 if ($cmd eq 'p') {
             plot_the_plot($histogram_obj, $plot);
 	 } elsif ($cmd eq 'g') {
-            $plot->gnuplot_cmd('set grid');
-            $plot->gnuplot_cmd('refresh');
+	   $plot->gnuplot_cmd('set grid');
+	     plot_the_plot($histogram_obj, $plot);
+       #     $plot->gnuplot_cmd('refresh');
          } elsif ($cmd eq 'q') {
             last;
-         } elsif ($cmd eq 'logy') {
-            $plot->gnuplot_cmd('set log y');
+	  } elsif ($cmd eq 'll') {
+	    if($log_y){
+	      $log_y = 0;
+	      $plot->gnuplot_cmd('unset log');
+	       $plot->gnuplot_set_yrange('*', '*');
+	    }else{
+	      $log_y = 1;
+	      $plot->gnuplot_cmd('set log y');
+	      $plot->gnuplot_set_yrange(0.8, '*');
+	    }
             plot_the_plot($histogram_obj, $plot);
          #   $plot->gnuplot_cmd('refresh');
          } elsif ($cmd eq 'refresh') {
