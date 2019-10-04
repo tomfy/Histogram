@@ -194,6 +194,7 @@ sub auto_bin{                   # automatically choose binwidth, etc.
   my $binwidth = $FD_bw;	# 4*$half_range/sqrt($n_points);
   my $bwf = 0.01;
 
+print STDERR "in auto bin. data type: ", $self->data_type(), "\n";
   if (0) {
     # put into range: [100,1000)
     while ($binwidth >= 1000) {
@@ -218,6 +219,11 @@ sub auto_bin{                   # automatically choose binwidth, etc.
   }
 
   $binwidth *= $bwf;
+
+  if($self->data_type() eq 'integer'){
+     $binwidth = 1 if ($binwidth < 1);
+     $binwidth = int($binwidth + 0.5);
+  }
 
   $self->set_binwidth($binwidth);
   # $lo_limit = $binwidth * floor( $lo_limit / $binwidth );
