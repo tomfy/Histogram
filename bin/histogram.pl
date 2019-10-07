@@ -48,7 +48,7 @@ use Histograms;
                                         data_fcol => $data,
                                         lo_limit => $lo_limit, hi_limit => $hi_limit, binwidth => $binwidth
                                        });
-   #print $histogram_obj->lo_limit(), "  ", $histogram_obj->hi_limit(), "\n";
+
    my $plot = Graphics::GnuplotIF->new( persist => $persist, style => 'histeps');
    $histogram_obj->bin_data();
    my $histogram_as_string = $histogram_obj->as_string();
@@ -59,14 +59,12 @@ use Histograms;
    }
    plot_the_plot($histogram_obj, $plot) if($do_plot);
 
-# my $xxx = <STDIN>;
-
    #####  modify plot in response to keyboard commands: #####
    while (1) {
      my $commands_string = <STDIN>; # command and optionally a parameter, e.g. 'x 0.8'
        $commands_string =~ s/\s+$//g; # delete whitespace
-  last if($commands_string eq 'q');
-my @cmds = split(';', $commands_string);
+     last if($commands_string eq 'q');
+     my @cmds = split(';', $commands_string);
      my ($cmd, $param) = (undef, undef);
 
      for my $cmd_param (@cmds){
