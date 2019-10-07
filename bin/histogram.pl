@@ -137,7 +137,12 @@ $param =~ s/^([^'])/'$1/;
 $param =~ s/([^']\s*)$/$1'/;
 print STDERR "param: $param \n";
             $plot->gnuplot_cmd("set xlabel $param");
-         }
+} elsif ($cmd eq 'export'){
+   $param =~ s/'//g;
+   $plot->gnuplot_hardcopy($param . '.png', 'png');
+   plot_the_plot($histogram_obj, $plot);
+   $plot->gnuplot_restore_terminal();
+}
          plot_the_plot($histogram_obj, $plot);
       }
      }
@@ -157,7 +162,7 @@ sub plot_the_plot{
    my $bin_centers = $histogram_obj->filecol_hdata()->{pooled}->bin_centers();
    #my $bin_counts = $histogram_obj->column_hdata()->{pooled}->bin_counts();
 
-   my @plot_titles = map("file:col $_", @{$histogram_obj->filecol_specifiers()} );
+   my @plot_titles = map("$_", @{$histogram_obj->filecol_specifiers()} );
    $plot_obj->gnuplot_set_plot_titles(@plot_titles);
 
    my @histo_bin_counts = map($histogram_obj->filecol_hdata()->{$_}->bin_counts(), @{$histogram_obj->filecol_specifiers()});
