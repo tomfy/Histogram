@@ -152,6 +152,8 @@ sub load_data_from_file{
          open my $fh_in, "<", $datafile or die "Couldn't open $datafile for reading.\n";
          while (my $line = <$fh_in>) {
             next if($line =~ /^\s*#/); # skip comments
+            $line =~ s/^\s+//;
+         #   $line =~ s/\s+$//;
             my @columns = split(/\s+/, $line);
             #  for my $the_column (@columns_to_histogram) {
             my $data_item = $columns[ $cth - 1 ];
