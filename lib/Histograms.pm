@@ -424,15 +424,15 @@ sub as_string{
          my $fc = $f . ':' . $csp;
          $h_string .= sprintf("# file:col %10s  n points: %5d   ", $fc, $self->filecol_hdata()->{$fc}->n_points());
          $h_string .= sprintf("mean: %9.4g   stddev: %9.4g   stderr: %9.4g\n",
-                              $self->filecol_hdata()->{$fc}->mean(), 
-                              $self->filecol_hdata()->{$fc}->stddev(), 
+                              $self->filecol_hdata()->{$fc}->mean(),
+                              $self->filecol_hdata()->{$fc}->stddev(),
                               $self->filecol_hdata()->{$fc}->stderr);
       }
    }
    $h_string .= sprintf("# pooled               n points: %5d   ", $self->filecol_hdata()->{pooled}->n_points());
    $h_string .= sprintf("mean: %9.4g   stddev: %9.4g   stderr: %9.4g\n",
-                        $self->filecol_hdata()->{pooled}->mean(), 
-                        $self->filecol_hdata()->{pooled}->stddev(), 
+                        $self->filecol_hdata()->{pooled}->mean(),
+                        $self->filecol_hdata()->{pooled}->stddev(),
                         $self->filecol_hdata()->{pooled}->stderr);
    return $h_string;
 }
@@ -444,10 +444,12 @@ sub set_filecol_specs{
    my @filecol_specs = ();
 
    #  my @filecol_specifiers = split(/;/, $self->data_fcol() ); # e.g. '0v1:3,4,5; 0v2:1,5,9' -> ('0v1:3,4,5', '0v2:1,5,9')
-   for my $fcs (split(/;/, $self->data_fcol() )) { 
+   for my $fcs (split(/;/, $self->data_fcol() )) {
+  #   $fcs =~ s/\s+//g; # remove whitespace
       print STDERR "fcs: ", $fcs, "\n";
       my ($f, $cols) = split(':', $fcs);
-      my @colspecs = split(',', $cols);
+  #   my @colspecs = split(',', $cols);
+     my @colspecs = split(/[, ]+/, $cols);
       for (@colspecs) {
          push @filecol_specs, $f . ':' . $_;
       }
