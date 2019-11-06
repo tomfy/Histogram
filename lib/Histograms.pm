@@ -126,8 +126,9 @@ sub BUILD{
    $self->load_data_from_file();
    #  print $self->lo_limit(), " ", $self->binwidth(), " ", $self->hi_limit(), "\n";
 
-   if (!(defined $self->lo_limit()  and  defined $self->hi_limit()  and  defined  $self->binwidth())) {
-      $self->auto_bin();
+ #  if (!(defined $self->lo_limit()  and  defined $self->hi_limit()  and  defined  $self->binwidth())) 
+if(!defined $self->binwidth()){
+      $self->auto_bin($self->lo_limit(), $self->hi_limit());
    }
 
    my $n_bins = int( ($self->hi_limit() - $self->lo_limit())/$self->binwidth() ) + 1;
@@ -182,6 +183,8 @@ sub load_data_from_file{
 
 sub auto_bin{                   # automatically choose binwidth, etc.
    my $self = shift;
+   my $lolimit = shift // undef;
+   my $hilimit = shift // undef;
 
    my $pooled_hdata = $self->filecol_hdata()->{'pooled'};
    my @bws = sort( keys %{ BINWIDTHS() } );
@@ -205,8 +208,8 @@ sub auto_bin{                   # automatically choose binwidth, etc.
    #   print STDERR "v5 etc.: $v5 $v95
    my ($lo_limit, $hi_limit) = ($mid - $half_range, $mid + $half_range);
    $lo_limit = 0 if($x_lo >= 0  and  $lo_limit < 0);
-   $self->lo_limit($lo_limit);
-   $self->hi_limit($hi_limit);
+   $self->lo_limit( $lolimit // $lo_limit );
+   $self->hi_limit( $hilimit // $hi_limit );
    
    # print "hr npts: $half_range  $n_points\n";
    my $binwidth = $FD_bw;	# 4*$half_range/sqrt($n_points);
@@ -255,6 +258,7 @@ sub auto_bin{                   # automatically choose binwidth, etc.
    # $self->lo_limit($lo_limit);
    # $self->hi_limit($hi_limit);
    # $self->binwidth($binwidth);
+print "lo, hi: ", $self->lo_limit(), "  ", $self->hi_limit(), "\n";
 }
 
 sub change_range{
