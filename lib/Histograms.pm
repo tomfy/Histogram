@@ -33,7 +33,7 @@ use constant  BINWIDTHS => {
 #######  which file and column of file to read  #########################
 
 
-has data_fcol => ( # strings representing files and column(s) (unit based) in which to find the numbers to be histogrammed.
+has data_fcol => ( # string representing files and column(s) (unit based) in which to find the numbers to be histogrammed.
                   isa => 'Str', # e.g. '0v1:2,3,4; 0v2:4,7,10' -> histogram cols 2,3,4 of file 0v1, and cols 4,7,10 of file 0v2
                   is => 'rw',
                   required => 1,
@@ -43,7 +43,14 @@ has filecol_specifiers => ( # one entry specifying file and column (e.g. 'x.out:
                            isa => 'ArrayRef',
                            is => 'rw',
                            required => 0,
-                        );
+			  );
+
+has histograms_to_plot => ( # if you request n histograms, this will default to [1,1,1,...1] (i.e. n 1's]
+			   # but if one of these is set to 0, then corresponding histogram will not be plotted
+			   isa => 'ArrayRef',
+			   is => 'rw',
+			   required => 0,
+			   );
 
   # has data_files_and_columns => ( # Hashref. keys are files, values strings specifying cols to be histogrammed.
   #                                isa => 'HashRef',
@@ -120,21 +127,23 @@ has n_bins => (
 # don't forget the ';' here!
 
 sub BUILD{
-   my $self = shift;
+  my $self = shift;
 
-   $self->set_filecol_specs(); # construct filecol_specifiers (e.g. ['x.out:3', 'x.out:5'] from 'x.out:3,5'
-   $self->load_data_from_file();
-   #  print $self->lo_limit(), " ", $self->binwidth(), " ", $self->hi_limit(), "\n";
+  $self->set_filecol_specs(); # construct filecol_specifiers (e.g. ['x.out:3', 'x.out:5'] from 'x.out:3,5'
+  my @histos_to_plot = ((1) x scalar @{$self->filecol_specifiers()});
+  $self->histograms_to_plot(\@histos_to_plot); # default to plotting all (but not pooled)
+  $self->load_data_from_file();
+  #  print $self->lo_limit(), " ", $self->binwidth(), " ", $self->hi_limit(), "\n";
 
- #  if (!(defined $self->lo_limit()  and  defined $self->hi_limit()  and  defined  $self->binwidth())) 
-if(!defined $self->binwidth()){
-      $self->auto_bin($self->lo_limit(), $self->hi_limit());
-   }
+  #  if (!(defined $self->lo_limit()  and  defined $self->hi_limit()  and  defined  $self->binwidth())) 
+  if (!defined $self->binwidth()) {
+    $self->auto_bin($self->lo_limit(), $self->hi_limit());
+  }
 
-   my $n_bins = int( ($self->hi_limit() - $self->lo_limit())/$self->binwidth() ) + 1;
-   $self->n_bins($n_bins);
+  my $n_bins = int( ($self->hi_limit() - $self->lo_limit())/$self->binwidth() ) + 1;
+  $self->n_bins($n_bins);
 
-   print "In BUILD: ", $self->lo_limit(), "  ", $self->hi_limit(), "  ", $self->binwidth(), "  ", $self->n_bins(), "\n";
+  print "In BUILD: ", $self->lo_limit(), "  ", $self->hi_limit(), "  ", $self->binwidth(), "  ", $self->n_bins(), "\n";
 
 }
 
