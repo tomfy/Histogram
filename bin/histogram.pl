@@ -19,9 +19,7 @@ use lib $libdir;
 use Histograms;
 
 {                               # main
-  #<<<<<<< HEAD
-  #   my $input_filename = undef;
-  #   my $columns = undef;
+
   my $lo_limit = undef;
   my $hi_limit = undef;
   my $binwidth = undef;
@@ -40,33 +38,7 @@ use Histograms;
 	     'plot!' => \$do_plot, # -noplot to suppress plot - just see histogram as text.
 	     'logy!' => \$log_y,
 	    );
-  # =======
-  #   #   my $input_filename = undef;
-  #   #   my $columns = undef;
-  #   my $lo_limit = undef;
-  #   my $hi_limit = undef;
-  #   my $binwidth = undef;
-  #   my $persist = 0;
-  #   my $do_plot = 1;
-  #   my $log_y = 0;
-  #   my $data = undef;
 
-  #   GetOptions(
-  # 	     'data|input=s' => \$data,
-  # 	     #             'input_filename=s' => \$input_filename,
-  # 	     #             'columns=s' => \$columns, # unit based, i.e. left-most column is 1
-  # 	     'low_limit=f' => \$lo_limit,
-  # 	     'hi_limit=f' => \$hi_limit,
-  # 	     'bw|binwidth|width=f' => \$binwidth,
-  # 	     'plot!' => \$do_plot, # -noplot to suppress plot - just see histogram as text.
-  # 	     'logy!' => \$log_y,
-  # 	    );
-  # >>>>>>> 989dd3ac8f8ad24edab82d9ce779e996bea2b741
-
-
-
-
-  #<<<<<<< HEAD
   print "files&columns to histogram: [$data] \n";
   my $histogram_obj = Histograms->new({
 				       data_fcol => $data,
