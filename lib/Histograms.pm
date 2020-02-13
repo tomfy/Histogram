@@ -167,6 +167,7 @@ sub load_data_from_file{
 	#   $line =~ s/\s+$//;
 	my @columns = split(/\s+/, $line);
 	#  for my $the_column (@columns_to_histogram) {
+#	print join(", ", @columns), "\n";
 	for my $cth (@cols_to_histogram ) {
 	  my $data_item = $columns[ $cth - 1 ];
 	  if (looks_like_number( $data_item ) ) {
