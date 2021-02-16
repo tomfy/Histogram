@@ -23,7 +23,7 @@ use Hdata;
 use constant  BINWIDTHS => {
 			    100 => [80, 125],
 			    125 => [100, 200],
-			    200 =>[125, 250],
+			    200 => [125, 250],
 			    250 => [200, 400],
 			    400 => [250, 500],
 			    500 => [400, 800],
@@ -114,11 +114,6 @@ has n_bins => (
 #########################################################################
 
 
-
-
-
-
-
 #########################################################################
 
 # around BUILDARGS => sub{
@@ -156,32 +151,103 @@ sub load_data_from_file{
 
   for my $histogram_id (@{$self->filecol_specifiers()}) { # $histogram_id e.g. 'file_x:4' or 'file_x:'
     $filecol_hdata{$histogram_id} = Hdata->new();
-    if ($histogram_id =~ /^([^:]+)[:](\S+)/) {
+    if ($histogram_id =~ /^([^:]+)[:](\S+)/) { # add the values from 2 or more columns
       my ($datafile, $csth) = ($1, $2);
-     my @cols_to_histogram = split(/[uU]/, $csth);
-
-      open my $fh_in, "<", $datafile or die "Couldn't open $datafile for reading.\n";
-      while (my $line = <$fh_in>) {
-	next if($line =~ /^\s*#/); # skip comments
-	$line =~ s/^\s+//;
-	#   $line =~ s/\s+$//;
-	my @columns = split(/\s+/, $line);
-	#  for my $the_column (@columns_to_histogram) {
-#	print join(", ", @columns), "\n";
-	for my $cth (@cols_to_histogram ) {
-	  my $data_item = $columns[ $cth - 1 ];
-	  if (looks_like_number( $data_item ) ) {
-
-	    $integer_data = 0 if(! ($data_item =~ /^[+-]?\d+\z/) );
-	    #    print "$data_item $integer_data \n";
-	    $filecol_hdata{$histogram_id}->add_value( $data_item );
-	    $filecol_hdata{'pooled'}->add_value( $data_item );
+      if ($csth =~ /[\+]/) {
+	my @cols_to_sum = split('\+', $csth);
+	my @coefficients = ();
+	while (my ($i, $cc) = each @cols_to_sum) {
+	  my ($coeff, $col) = ();
+	  if ($cc =~ /[*]/) {
+	    ($coeff, $col) = split(/[*]/, $cc);
 	  } else {
-	    #  $nonnumber_count++;
+	    $coeff = 1;
+	    $col = $cc;
+	  }
+	  $coefficients[$i] = $coeff;
+	  $cols_to_sum[$i] = $col;
+	}
+	print STDERR join(", ", @cols_to_sum);
+	open my $fh_in, "<", $datafile or die "Couldn't open $datafile for reading.\n";
+	while (my $line = <$fh_in>) {
+	  next if($line =~ /^\s*#/); # skip comments
+	  $line =~ s/^\s+//;
+	  #   $line =~ s/\s+$//;
+	  my @columns = split(/\s+/, $line);
+	  my $sum_to_histogram = 0;
+	  while (my ($i, $cth) = each @cols_to_sum ) {
+	    my $data_item = $columns[ $cth - 1 ];
+	    
+	    if (looks_like_number( $data_item ) ) {
+	      $integer_data = 0 if(! ($data_item =~ /^[+-]?\d+\z/) );
+	      #   print "$data_item $integer_data \n";
+	      $sum_to_histogram += $coefficients[$i]*$data_item;
+	    
+	    } else {
+	      #  $nonnumber_count++;
+	    }
+	  }
+	  $filecol_hdata{$histogram_id}->add_value( $sum_to_histogram);
+	  $filecol_hdata{'pooled'}->add_value( $sum_to_histogram );
+	}
+	close $fh_in;
+      } elsif ($csth =~ /[\-]/) { # difference of values from 2 columns.
+	my @cols_to_diff = split('\-', $csth);
+	if (scalar @cols_to_diff == 2) {
+	  open my $fh_in, "<", $datafile or die "Couldn't open $datafile for reading.\n";
+	  while (my $line = <$fh_in>) {
+	    next if($line =~ /^\s*#/); # skip comments
+	    $line =~ s/^\s+//;
+	    #   $line =~ s/\s+$//;
+	    my @columns = split(/\s+/, $line);
+	    #  my $diff_to_histogram = 0;
+	    #  for my $cth (@cols_to_diff ) {
+	    my $data_item0 = $columns[$cols_to_diff[0]-1];
+	    my $data_item1 = $columns[$cols_to_diff[1]-1];
+	    
+	    if (looks_like_number( $data_item0 )  and looks_like_number( $data_item1)) {
+
+	      $integer_data = 0 if(! ($data_item0 =~ /^[+-]?\d+\z/) );
+	      $integer_data = 0 if(! ($data_item1 =~ /^[+-]?\d+\z/) ); 
+	      #    print "$data_item $integer_data \n";
+	      my $diff_to_histogram = $data_item0 - $data_item1;
+	      $filecol_hdata{$histogram_id}->add_value( $diff_to_histogram);
+	      $filecol_hdata{'pooled'}->add_value( $diff_to_histogram );
+	    } else {
+	      #  $nonnumber_count++;
+	    }
+	    # }
+	  
+	  }
+	  close $fh_in;
+	}
+      } else { # 
+	my @cols_to_histogram = split(/[uU]/, $csth);
+
+	open my $fh_in, "<", $datafile or die "Couldn't open $datafile for reading.\n";
+	while (my $line = <$fh_in>) {
+	  next if($line =~ /^\s*#/); # skip comments
+	  $line =~ s/^\s+//;
+	  #   $line =~ s/\s+$//;
+	  my @columns = split(/\s+/, $line);
+	  #  for my $the_column (@columns_to_histogram) {
+	  #	print join(", ", @columns), "\n";
+	  for my $cth (@cols_to_histogram ) {
+	    my $data_item = $columns[ $cth - 1 ];
+	 #   print "data item: $data_item \n";
+	    if (looks_like_number( $data_item ) ) {
+
+	      $integer_data = 0 if(! ($data_item =~ /^[+-]?\d+\z/) );
+	      #    print "$data_item $integer_data \n";
+	      $filecol_hdata{$histogram_id}->add_value( $data_item );
+	      $filecol_hdata{'pooled'}->add_value( $data_item );
+	    } else {
+	      #  $nonnumber_count++;
+	    }
 	  }
 	}
+	close $fh_in;
       }
-      close $fh_in;
     }
   }
 
@@ -194,7 +260,7 @@ sub load_data_from_file{
 
 ######## defining the binning #########
 
-sub auto_bin{                   # automatically choose binwidth, etc.
+sub auto_bin{			# automatically choose binwidth, etc.
   my $self = shift;
   my $lolimit = shift // undef;
   my $hilimit = shift // undef;
@@ -211,13 +277,21 @@ sub auto_bin{                   # automatically choose binwidth, etc.
   #my ($v5, $v95) = ($pooled_hdata->data_array()->[$i5], $pooled_hdata->data_array()->[$i95]);
   my $v5 = $pooled_hdata->data_array()->[$i5];
   my $v95 = $pooled_hdata->data_array()->[$i95];
+   my $range = $pooled_hdata->data_array()->[-1] - $pooled_hdata->data_array()->[0];
   my $iq1 = int(0.25*$n_points);
   my $iq3 = $n_points - $iq1 - 1;
-  my $iqr = $pooled_hdata->data_array()->[$iq3] - $pooled_hdata->data_array()->[$iq1];
-  my $FD_bw = 2*$iqr/$n_points**0.3333;
+ 
   my $mid = 0.5*($v5 + $v95);
   my $v90range = $v95-$v5;
-  my $half_range = 0.5*($v90range * 2);
+ print "range, v90range: $range $v90range \n";
+  my $half_range = 0.5*(2 * $v90range);
+  my $iqr = $pooled_hdata->data_array()->[$iq3] - $pooled_hdata->data_array()->[$iq1];
+  if( $iqr == 0 ){
+    $iqr = $range;
+    $half_range =  0.5*(2 * $range);
+  }
+  my $FD_bw = 2*$iqr/$n_points**0.3333;
+   print "iqr, etc: $iqr  $n_points  ", $n_points**0.3333, "\n";
   #   print STDERR "v5 etc.: $v5 $v95
   my ($lo_limit, $hi_limit) = ($mid - $half_range, $mid + $half_range);
   $lo_limit = 0 if($x_lo >= 0  and  $lo_limit < 0);
@@ -227,7 +301,7 @@ sub auto_bin{                   # automatically choose binwidth, etc.
   # print "hr npts: $half_range  $n_points\n";
   my $binwidth = $FD_bw;	# 4*$half_range/sqrt($n_points);
   my $bwf = 0.01;
-
+print STDERR "XXX $lo_limit  $hi_limit  $binwidth  $bwf \n";
   print STDERR "in auto bin. data type: ", $self->data_type(), "\n";
   if (0) {
     # put into range: [100,1000)
@@ -271,7 +345,7 @@ sub auto_bin{                   # automatically choose binwidth, etc.
   # $self->lo_limit($lo_limit);
   # $self->hi_limit($hi_limit);
   # $self->binwidth($binwidth);
-  print "lo, hi: ", $self->lo_limit(), "  ", $self->hi_limit(), "\n";
+  print "lo, hi: ", $self->lo_limit(), "  ", $self->hi_limit(), "  binwidth: ", $binwidth,  "\n";
 }
 
 sub change_range{
@@ -387,21 +461,30 @@ sub as_string{
 
   #   my @filecol_specs = @{$self->get_filecol_specs()};
   my @filecol_specs = @{$self->filecol_specifiers};
+  push @filecol_specs, 'pooled';
+  my %fcs_cumulative = ();
   # print STDERR "filecolspecs: ", join("; ", @filecol_specs), "\n";
-  my $horiz_line_string .= sprintf("#----------------------------------------------");
+  my $horiz_line_string .= sprintf("#------------------------------------");
   for (@filecol_specs) {
-    $horiz_line_string .= "----------";
+    $horiz_line_string .= "--------------------";
+    $fcs_cumulative{$_} = 0;
   }
   $horiz_line_string .= "\n";
 
-  $h_string .= sprintf("# data from file:column             " . "%9s " x (@filecol_specs+1) . "\n", @filecol_specs, '  pooled' );
+  $h_string .= sprintf("# data from file:column                     " . "%-18s  " x (@filecol_specs) . "\n", @filecol_specs);
   $h_string .= $horiz_line_string;
   $h_string .= sprintf("     < %6.4g  (underflow)          ", $self->lo_limit());
 
   for my $fcspec (@filecol_specs) {
-    $h_string .= sprintf("%9.4g ", $self->filecol_hdata()->{$fcspec}->underflow_count() // 0);
+    my $val =  $self->filecol_hdata()->{$fcspec}->underflow_count() // 0;
+    $fcs_cumulative{$fcspec} += $val;
+    $h_string .= sprintf("%9.4g %9.4g ", $val, $fcs_cumulative{$fcspec}); # $self->filecol_hdata()->{$fcspec}->underflow_count() // 0);
   }
-  $h_string .= sprintf("%9.4g \n", $self->filecol_hdata()->{pooled}->underflow_count() );
+  $h_string .= "\n";
+  # my $val =  $self->filecol_hdata()->{}->underflow_count() // 0;
+  #   $fcs_cumulative{$fcspec} += $val;
+  #   $h_string .= sprintf("%9.4g %9.4g", $val, $fcs_cumulative{$fcspec}); # $self->filecol_hdata()->{$fcspec}->underflow_count() // 0);
+  # $h_string .= sprintf("%9.4g \n", $self->filecol_hdata()->{pooled}->underflow_count() );
 
   $h_string .= $horiz_line_string;
   $h_string .= sprintf("# bin     min    center       max     count \n");
@@ -414,20 +497,24 @@ sub as_string{
 			 $bin_hi_limit);
 
     for my $fcspec (@filecol_specs) {
-      $h_string .= sprintf("%9.4g ", $self->filecol_hdata()->{$fcspec}->bin_counts()->[$i] // 0);
+      my $val =  $self->filecol_hdata()->{$fcspec}->bin_counts()->[$i] // 0;
+      $fcs_cumulative{$fcspec} += $val;
+      $h_string .= sprintf("%9.4g %9.4g ", $val, $fcs_cumulative{$fcspec}); # $self->filecol_hdata()->{$fcspec}->bin_counts()->[$i] // 0);
     }
 
-    $h_string .= sprintf("%9d\n", ($self->filecol_hdata()->{pooled}->bin_counts()->[$i] // 0));
+    $h_string .= "\n"; # sprintf("%9d\n", ($self->filecol_hdata()->{pooled}->bin_counts()->[$i] // 0));
   }
   $h_string .= $horiz_line_string;
   $h_string .= sprintf("     > %6.4g   (overflow)          ", $self->hi_limit());
 
   for my $fcspec (@filecol_specs) {
-    $h_string .= sprintf("%9.4g ", $self->filecol_hdata()->{$fcspec}->overflow_count() // 0);
+    my $val =  $self->filecol_hdata()->{$fcspec}->overflow_count() // 0;
+    $fcs_cumulative{$fcspec} += $val;
+    $h_string .= sprintf("%9.4g %9.4g ", $val, $fcs_cumulative{$fcspec}); # $self->filecol_hdata()->{$fcspec}->overflow_count() // 0);
   }
-  $h_string .= sprintf("%9.4g \n", $self->filecol_hdata()->{pooled}->overflow_count() );
+  $h_string .= sprintf("\n"); #, $self->filecol_hdata()->{pooled}->overflow_count() );
   $h_string .= $horiz_line_string;
-   
+
   #  $h_string .= sprintf("# range: [%9.4g,%9.4g]   median: %9.4g\n", @{$self->range()},  $self->median());
   #  for (@col_specs) {
   for my $fcspec (@filecol_specs) {
@@ -449,8 +536,6 @@ sub as_string{
 		       $self->filecol_hdata()->{pooled}->stderr);
   return $h_string;
 }
-
-
 
 sub set_filecol_specs{
   my $self = shift;

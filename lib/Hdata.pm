@@ -12,7 +12,7 @@ use POSIX qw ( floor ceil );
 # to hold the data from (typically) one column, together with
 # mean, stddev, etc.
 
-# data values, sorted but not binned
+# data values, sorted but not binnedx
 
 has data_array => (
                   isa => 'ArrayRef',
