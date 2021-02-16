@@ -26,7 +26,10 @@ use Histograms;
   my $persist = 0;
   my $do_plot = 1;
   my $log_y = 0;
+  my $key_horiz_position = 'right';
+  my $key_vert_position = 'top';
   my $data = undef;
+  my $gnuplot_command = undef;
 
   GetOptions(
 	     'data|input=s' => \$data,
@@ -37,6 +40,9 @@ use Histograms;
 	     'bw|binwidth|width=f' => \$binwidth,
 	     'plot!' => \$do_plot, # -noplot to suppress plot - just see histogram as text.
 	     'logy!' => \$log_y,
+	     'h_key|key_horiz_position=s' => \$key_horiz_position,
+	      'v_key|key_vert_position=s' => \$key_vert_position,
+	     'command=s' => \$gnuplot_command,
 	    );
 
   print "files&columns to histogram: [$data] \n";
@@ -51,24 +57,28 @@ use Histograms;
 
 
   my $plot = Graphics::GnuplotIF->new( persist => $persist, style => 'histeps');
-  $plot->gnuplot_cmd('set terminal x11');
+  $plot->gnuplot_cmd('set terminal x11 noenhanced');
+  $plot->gnuplot_cmd('set tics out');
   if ($log_y) {
     $plot->gnuplot_cmd('set log y');
     $plot->gnuplot_set_yrange(0.8, '*');
   }
+  #if($left_key) {
+  my $key_pos_cmd = 'set key ' . "$key_horiz_position  $key_vert_position";
+    $plot->gnuplot_cmd($key_pos_cmd);
+  #}
   $plot->gnuplot_cmd('set border lw 1.5');
   $plot->gnuplot_cmd('set mxtics');
   $plot->gnuplot_cmd('set tics front');
   $plot->gnuplot_cmd('set tics scale 2,1');
+  $plot->gnuplot_cmd($gnuplot_command) if(defined $gnuplot_command);
   #  $plot->gnuplot_cmd('set tics out');
 
-  
- 
   plot_the_plot($histogram_obj, $plot) if($do_plot);
 
   #####  modify plot in response to keyboard commands: #####
   while (1) {
-    my $commands_string = <STDIN>; # command and optionally a parameter, e.g. 'x 0.8'
+    my $commands_string = <STDIN>; # command and optionally a parameter, e.g. 'x:0.8'
     $commands_string =~ s/\s+$//g; # delete whitespace
     last if($commands_string eq 'q');
     my @cmds = split(';', $commands_string);
@@ -77,7 +87,8 @@ use Histograms;
     for my $cmd_param (@cmds) {
       if ($cmd_param =~ /^([^:]+):(.+)/) {
 	($cmd, $param) = ($1, $2);
-	$param =~ s/\s+//g if(! $cmd =~ /xlabel/);
+	$param =~ s/\s+//g if(! $cmd =~ /^\s*xlabel\s*$/);
+	print STDERR "cmd: [$cmd]  param: [$param]\n";
       } elsif ($cmd_param =~ /^(\S+)/) {
 	$cmd = $1;
       }
@@ -149,6 +160,13 @@ use Histograms;
 	  $histogram_obj->histograms_to_plot()->[$param-1] = 0;
 	} elsif ($cmd eq 'on'){
 	  $histogram_obj->histograms_to_plot()->[$param-1] = 1;
+	}elsif ($cmd eq 'cmd'){
+	  print STDERR "xxcmd: $cmd param: $param\n";
+	  if($param =~ /^\s*['](.+)[']\s*$/){ # remove surrounding single quotes if present
+	    $param = $1;
+	  }
+	  print STDERR "xxxcmd: $cmd  param: $param\n";
+	  $plot->gnuplot_cmd("$param");
 	}
 	plot_the_plot($histogram_obj, $plot);
       }
