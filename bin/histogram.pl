@@ -30,6 +30,8 @@ use Histograms;
   my $key_vert_position = 'top';
   my $data = undef;
   my $gnuplot_command = undef;
+  my $linewidth = 1.5;
+  my $terminal = 'x11';
 
   GetOptions(
 	     'data|input=s' => \$data,
@@ -43,6 +45,8 @@ use Histograms;
 	     'h_key|key_horiz_position=s' => \$key_horiz_position,
 	      'v_key|key_vert_position=s' => \$key_vert_position,
 	     'command=s' => \$gnuplot_command,
+	     'linewidth|lw=f' => \$linewidth,
+	     'terminal=s' => \$terminal,
 	    );
 
   print "files&columns to histogram: [$data] \n";
@@ -57,7 +61,7 @@ use Histograms;
 
 
   my $plot = Graphics::GnuplotIF->new( persist => $persist, style => 'histeps');
-  $plot->gnuplot_cmd('set terminal x11 noenhanced');
+  $plot->gnuplot_cmd("set terminal $terminal noenhanced linewidth $linewidth");
   $plot->gnuplot_cmd('set tics out');
   if ($log_y) {
     $plot->gnuplot_cmd('set log y');
@@ -67,7 +71,7 @@ use Histograms;
   my $key_pos_cmd = 'set key ' . "$key_horiz_position  $key_vert_position";
     $plot->gnuplot_cmd($key_pos_cmd);
   #}
-  $plot->gnuplot_cmd('set border lw 1.5');
+  $plot->gnuplot_cmd('set border lw 1.25'); # apparently this width is relative to that for the histogram.
   $plot->gnuplot_cmd('set mxtics');
   $plot->gnuplot_cmd('set tics front');
   $plot->gnuplot_cmd('set tics scale 2,1');
@@ -153,7 +157,8 @@ use Histograms;
 	  $plot->gnuplot_cmd("set xlabel $param");
 	} elsif ($cmd eq 'export') {
 	  $param =~ s/'//g;
-	  $plot->gnuplot_hardcopy($param . '.png', 'png');
+
+	  $plot->gnuplot_hardcopy($param . '.png', "png linewidth $linewidth");
 	  plot_the_plot($histogram_obj, $plot);
 	  $plot->gnuplot_restore_terminal();
 	} elsif ($cmd eq 'off'){
