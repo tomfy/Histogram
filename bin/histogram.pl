@@ -50,6 +50,10 @@ use Histograms;
 	    );
 
   print "files&columns to histogram: [$data] \n";
+ my @plot_titles = ($data =~ /\"([^"]+)\"/g);
+  print "plot_titles:  ", join("  ", @plot_titles), "\n";
+#  $data =~ s/\"([^"]+)\"//g;
+  
   my $histogram_obj = Histograms->new({
 				       data_fcol => $data,
 				       lo_limit => $lo_limit, hi_limit => $hi_limit, 
@@ -59,8 +63,10 @@ use Histograms;
   my $histogram_as_string = $histogram_obj->as_string();
   print "$histogram_as_string \n";
 
+ 
 
   my $plot = Graphics::GnuplotIF->new( persist => $persist, style => 'histeps');
+  #, plot_titles => \@plot_titles); #, xlabel => 'lxable');
   $plot->gnuplot_cmd("set terminal $terminal noenhanced linewidth $linewidth");
   $plot->gnuplot_cmd('set tics out');
   if ($log_y) {
@@ -71,12 +77,13 @@ use Histograms;
   my $key_pos_cmd = 'set key ' . "$key_horiz_position  $key_vert_position";
     $plot->gnuplot_cmd($key_pos_cmd);
   #}
-  $plot->gnuplot_cmd('set border lw 1.25'); # apparently this width is relative to that for the histogram.
+  $plot->gnuplot_cmd('set border lw 1.25'); # apparently this width is relative to that for the histogram lines.
   $plot->gnuplot_cmd('set mxtics');
   $plot->gnuplot_cmd('set tics front');
   $plot->gnuplot_cmd('set tics scale 2,1');
   $plot->gnuplot_cmd($gnuplot_command) if(defined $gnuplot_command);
   #  $plot->gnuplot_cmd('set tics out');
+  $plot->gnuplot_set_plot_titles(@plot_titles);
 
   plot_the_plot($histogram_obj, $plot) if($do_plot);
 
@@ -191,6 +198,7 @@ sub plot_the_plot{
   #   my $plot_obj = Graphics::GnuplotIF->new( persist => $persist, style => 'histeps');
   $plot_obj->gnuplot_set_xrange($histogram_obj->lo_limit(), $histogram_obj->hi_limit());
   my $bin_centers = $histogram_obj->filecol_hdata()->{pooled}->bin_centers();
+  #print STDERR "Bin_centers  ", join(" ", @$bin_centers), "\n";
   #my $bin_counts = $histogram_obj->column_hdata()->{pooled}->bin_counts();
   # # =======
   #   my $histogram_obj = shift;
@@ -204,20 +212,31 @@ sub plot_the_plot{
   #   #my $bin_counts = $histogram_obj->column_hdata()->{pooled}->bin_counts();
   # # >>>>>>>  989dd3ac8f8ad24edab82d9ce779e996bea2b741
 
-  my @plot_titles = map("$_", @{$histogram_obj->filecol_specifiers()} );
-  $plot_obj->gnuplot_set_plot_titles(@plot_titles);
+  # my @plot_titles = map("$_", @{$histogram_obj->filecol_specifiers()} );
+  # print STDERR "plot titles:  ", join("  ", @plot_titles), "\n";
+  # $plot_obj->gnuplot_set_plot_titles(@plot_titles);
 
 
   my @histo_bin_counts = ();
+#  my @histo_bin_counts_w_styles = (); # array of hashrefs
   # map($histogram_obj->filecol_hdata()->{$_}->bin_counts(), @{$histogram_obj->filecol_specifiers()});
   while (my ($hi, $plt) = each @{$histogram_obj->histograms_to_plot()} ) {
-    print STDERR join(" ", @{$histogram_obj->histograms_to_plot()} ), "\n";
+  #  print STDERR "histograms to plot:  ", join(" ", @{$histogram_obj->histograms_to_plot()} ), "\n";
     if ($plt == 1) {
       print STDERR "adding histogram w index $hi.\n";
       my $fcspec = $histogram_obj->filecol_specifiers()->[$hi];
-      push @histo_bin_counts, $histogram_obj->filecol_hdata()->{$fcspec}->bin_counts();
+      my $bincounts = $histogram_obj->filecol_hdata()->{$fcspec}->bin_counts();
+   #   print STDERR "Bincounts: $hi  ", "n bins: ", scalar @$bincounts, "  ", join(" ", @$bincounts), "\n";
+      push @histo_bin_counts, $bincounts; # push an array ref holding the bin counts ...
+ #     push @histo_bin_counts_w_styles, {y_values => $bincounts, style_spec => "t'description'"};
     }
   }
+#  print STDERR "n histograms: ", scalar @histo_bin_counts, "\n";
+  # for my $hbc (@histo_bin_counts){
+  #   print STDERR "bincounts: [", join("|", @$hbc), "]\n";
+  # }
+  #print STDERR "Bin_centers  ", scalar @$bin_centers, "  ", join(" ", @$bin_centers), "\n";
   $plot_obj->gnuplot_plot_xy($bin_centers, @histo_bin_counts); # , $bin_counts);
+#  $plot_obj->gnuplot_plot_xy_style($bin_centers, @histo_bin_counts_w_styles);
   
 }

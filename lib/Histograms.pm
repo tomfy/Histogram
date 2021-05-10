@@ -40,6 +40,7 @@ has data_fcol => ( # string representing files and column(s) (unit based) in whi
                  );
 
 has filecol_specifiers => ( # one entry specifying file and column (e.g. 'x.out:3' for each histogram.
+			   # also e.g. file1:3+4  or file1:3-5"difference of cols 3,5"
                            isa => 'ArrayRef',
                            is => 'rw',
                            required => 0,
@@ -149,10 +150,13 @@ sub load_data_from_file{
 
   my $integer_data = 1;
 
-  for my $histogram_id (@{$self->filecol_specifiers()}) { # $histogram_id e.g. 'file_x:4' or 'file_x:'
+  for my $histogram_id (@{$self->filecol_specifiers()}) { # $histogram_id e.g. 'file_x:4' or 'file_x:5+6"sum_of_5and6"'
     $filecol_hdata{$histogram_id} = Hdata->new();
     if ($histogram_id =~ /^([^:]+)[:](\S+)/) { # add the values from 2 or more columns
       my ($datafile, $csth) = ($1, $2);
+         print STDERR "before: $csth \n";
+      $csth =~ s/\" (\S+) \"//x;
+      print STDERR "after: $csth       $1\n\n";
       if ($csth =~ /[\+]/) {
 	my @cols_to_sum = split('\+', $csth);
 	my @coefficients = ();
@@ -221,7 +225,8 @@ sub load_data_from_file{
 	  }
 	  close $fh_in;
 	}
-      } else { # 
+      } else { #
+	print STDERR "XXX: $csth \n";
 	my @cols_to_histogram = split(/[uU]/, $csth);
 
 	open my $fh_in, "<", $datafile or die "Couldn't open $datafile for reading.\n";
@@ -421,7 +426,7 @@ sub bin_data{ # populate the bins using existing bin specification (binwidth, et
 
   while (my ($col, $hdata) = each %{$self->filecol_hdata}) {
 
-    my @bin_counts = (0) x $self->n_bins();
+    my @bin_counts = (0) x ($self->n_bins() + 1);
     my @bin_centers = map( $self->lo_limit() + ($_ + 0.5)*$self->binwidth(), (0 .. $self->n_bins() ) );
     #     print STDERR 'lo_limit: ', $self->lo_limit(), "   bin centers: ", join('  ', @bin_centers), "\n";
     my ($underflow_count, $overflow_count) = (0, 0);
@@ -471,7 +476,7 @@ sub as_string{
   }
   $horiz_line_string .= "\n";
 
-  $h_string .= sprintf("# data from file:column                     " . "%-18s  " x (@filecol_specs) . "\n", @filecol_specs);
+  $h_string .= sprintf("# data from file:column                " . "%-18s  " x (@filecol_specs) . "\n", @filecol_specs);
   $h_string .= $horiz_line_string;
   $h_string .= sprintf("     < %6.4g  (underflow)          ", $self->lo_limit());
 
@@ -519,6 +524,8 @@ sub as_string{
   #  for (@col_specs) {
   for my $fcspec (@filecol_specs) {
     my ($f, $cspec) = split(':', $fcspec);
+    print STDERR "f cspec:  ", $f // 'undef', "  ", $cspec // 'undef', "\n";
+    $cspec = '' if(!defined $cspec);
     my @colspecs = split(',', $cspec);
     for my $csp (@colspecs) {
       my $fc = $f . ':' . $csp;
@@ -549,6 +556,8 @@ sub set_filecol_specs{
     #   my @colspecs = split(',', $cols);
     my @colspecs = split(/[, ]+/, $cols);
     for (@colspecs) {
+      my $filecolspec = $f . ':' . $_;
+      print STDERR "filecolspec: $filecolspec \n";
       push @filecol_specs, $f . ':' . $_;
     }
   }
