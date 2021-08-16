@@ -10,16 +10,6 @@ use List::Util qw ( min max sum );
 use POSIX qw ( floor ceil );
 use Hdata;
 
-# use constant  BINWIDTHS => {
-# 		      1.0 => [0.8, 1.25],
-# 		      1.25 => [1.0, 2.0],
-# 		      2.0 =>[1.25, 2.5],
-# 		      2.5 => [2.0, 4.0],
-# 		      4.0 => [2.5, 5.0],
-# 		      5.0 => [4.0, 8.0],
-# 		      8.0 => [5.0, 10.0]
-# 			   };
-
 use constant  BINWIDTHS => {
 			    100 => [80, 125],
 			    125 => [100, 200],
@@ -93,24 +83,28 @@ has binwidth => (
                  isa => 'Maybe[Num]',
                  is => 'rw',
                  required => 0,
+		 default => undef,
                 );
 
 has lo_limit => (               # low edge of lowest bin
                  isa => 'Maybe[Num]',
                  is => 'rw',
                  required => 0,
+		 default => undef,
                 );
 
 has hi_limit => (               # high edge of highest bin
                  isa => 'Maybe[Num]',
                  is => 'rw',
                  required => 0,
+		 default => undef,
                 );
 
 has n_bins => (
                isa => 'Maybe[Num]',
                is => 'rw',
                required => 0,
+	       default => undef,
               );
 #########################################################################
 
@@ -118,7 +112,7 @@ has n_bins => (
 #########################################################################
 
 # around BUILDARGS => sub{
-
+#
 # };
 # don't forget the ';' here!
 
@@ -129,11 +123,11 @@ sub BUILD{
   my @histos_to_plot = ((1) x scalar @{$self->filecol_specifiers()});
   $self->histograms_to_plot(\@histos_to_plot); # default to plotting all (but not pooled)
   $self->load_data_from_file();
-  #  print $self->lo_limit(), " ", $self->binwidth(), " ", $self->hi_limit(), "\n";
+  print $self->lo_limit() // 'undef', " ", $self->binwidth() // 'undef', " ", $self->hi_limit() // 'undef', "\n";
 
   #  if (!(defined $self->lo_limit()  and  defined $self->hi_limit()  and  defined  $self->binwidth())) 
-  if (!defined $self->binwidth()) {
-    $self->auto_bin($self->lo_limit(), $self->hi_limit());
+  if (1 or !defined $self->binwidth()) {
+    $self->auto_bin($self->lo_limit(), $self->hi_limit(), $self->binwidth());
   }
 
   my $n_bins = int( ($self->hi_limit() - $self->lo_limit())/$self->binwidth() ) + 1;
@@ -152,106 +146,18 @@ sub load_data_from_file{
 
   for my $histogram_id (@{$self->filecol_specifiers()}) { # $histogram_id e.g. 'file_x:4' or 'file_x:5+6"sum_of_5and6"'
     $filecol_hdata{$histogram_id} = Hdata->new();
-    if ($histogram_id =~ /^([^:]+)[:](\S+)/) { # add the values from 2 or more columns
-      my ($datafile, $csth) = ($1, $2);
-         print STDERR "before: $csth \n";
-      $csth =~ s/\" (\S+) \"//x;
-      print STDERR "after: $csth       $1\n\n";
-      if ($csth =~ /[\+]/) {
-	my @cols_to_sum = split('\+', $csth);
-	my @coefficients = ();
-	while (my ($i, $cc) = each @cols_to_sum) {
-	  my ($coeff, $col) = ();
-	  if ($cc =~ /[*]/) {
-	    ($coeff, $col) = split(/[*]/, $cc);
-	  } else {
-	    $coeff = 1;
-	    $col = $cc;
-	  }
-	  $coefficients[$i] = $coeff;
-	  $cols_to_sum[$i] = $col;
-	}
-	print STDERR join(", ", @cols_to_sum);
-	open my $fh_in, "<", $datafile or die "Couldn't open $datafile for reading.\n";
-	while (my $line = <$fh_in>) {
-	  next if($line =~ /^\s*#/); # skip comments
-	  $line =~ s/^\s+//;
-	  #   $line =~ s/\s+$//;
-	  my @columns = split(/\s+/, $line);
-	  my $sum_to_histogram = 0;
-	  while (my ($i, $cth) = each @cols_to_sum ) {
-	    my $data_item = $columns[ $cth - 1 ];
-	    
-	    if (looks_like_number( $data_item ) ) {
-	      $integer_data = 0 if(! ($data_item =~ /^[+-]?\d+\z/) );
-	      #   print "$data_item $integer_data \n";
-	      $sum_to_histogram += $coefficients[$i]*$data_item;
-	    
-	    } else {
-	      #  $nonnumber_count++;
-	    }
-	  }
-	  $filecol_hdata{$histogram_id}->add_value( $sum_to_histogram);
-	  $filecol_hdata{'pooled'}->add_value( $sum_to_histogram );
-	}
-	close $fh_in;
-      } elsif ($csth =~ /[\-]/) { # difference of values from 2 columns.
-	my @cols_to_diff = split('\-', $csth);
-	if (scalar @cols_to_diff == 2) {
-	  open my $fh_in, "<", $datafile or die "Couldn't open $datafile for reading.\n";
-	  while (my $line = <$fh_in>) {
-	    next if($line =~ /^\s*#/); # skip comments
-	    $line =~ s/^\s+//;
-	    #   $line =~ s/\s+$//;
-	    my @columns = split(/\s+/, $line);
-	    #  my $diff_to_histogram = 0;
-	    #  for my $cth (@cols_to_diff ) {
-	    my $data_item0 = $columns[$cols_to_diff[0]-1];
-	    my $data_item1 = $columns[$cols_to_diff[1]-1];
-	    
-	    if (looks_like_number( $data_item0 )  and looks_like_number( $data_item1)) {
+    if ($histogram_id =~ /^([^:]+)[:](\S+)/) { # 
+      my ($datafile, $csth) = ($1, $2); # $csth is columns specifier, e.g. 8 or 8+10 or 8u3 = 9-2"x-z"
+      print STDERR "before: [$csth] \n";
+      my $label = ($csth =~ s/\" (\S+) \"//x)? $1 : $histogram_id; # capture label and delete from $csth
+      print STDERR "after: [$csth]       [$label]\n\n";
 
-	      $integer_data = 0 if(! ($data_item0 =~ /^[+-]?\d+\z/) );
-	      $integer_data = 0 if(! ($data_item1 =~ /^[+-]?\d+\z/) ); 
-	      #    print "$data_item $integer_data \n";
-	      my $diff_to_histogram = $data_item0 - $data_item1;
-	      $filecol_hdata{$histogram_id}->add_value( $diff_to_histogram);
-	      $filecol_hdata{'pooled'}->add_value( $diff_to_histogram );
-	    } else {
-	      #  $nonnumber_count++;
-	    }
-	    # }
-	  
-	  }
-	  close $fh_in;
-	}
-      } else { #
-	print STDERR "XXX: $csth \n";
-	my @cols_to_histogram = split(/[uU]/, $csth);
-
-	open my $fh_in, "<", $datafile or die "Couldn't open $datafile for reading.\n";
-	while (my $line = <$fh_in>) {
-	  next if($line =~ /^\s*#/); # skip comments
-	  $line =~ s/^\s+//;
-	  #   $line =~ s/\s+$//;
-	  my @columns = split(/\s+/, $line);
-	  #  for my $the_column (@columns_to_histogram) {
-	  #	print join(", ", @columns), "\n";
-	  for my $cth (@cols_to_histogram ) {
-	    my $data_item = $columns[ $cth - 1 ];
-	 #   print "data item: $data_item \n";
-	    if (looks_like_number( $data_item ) ) {
-
-	      $integer_data = 0 if(! ($data_item =~ /^[+-]?\d+\z/) );
-	      #    print "$data_item $integer_data \n";
-	      $filecol_hdata{$histogram_id}->add_value( $data_item );
-	      $filecol_hdata{'pooled'}->add_value( $data_item );
-	    } else {
-	      #  $nonnumber_count++;
-	    }
-	  }
-	}
-	close $fh_in;
+      if ($csth =~ /^\d+([+-]\d+)*$/) {
+	$integer_data = read_and_sum_signed($datafile, $histogram_id, $csth, \%filecol_hdata);
+      } elsif ($csth =~ /^\d+(u\d+)*$/) {
+	$integer_data = read_and_union($datafile, $histogram_id, $csth, \%filecol_hdata);
+      } else {
+	print STDERR "Unrecognized column and operation specification: $csth. Skipping histogram $histogram_id\n";
       }
     }
   }
@@ -269,87 +175,44 @@ sub auto_bin{			# automatically choose binwidth, etc.
   my $self = shift;
   my $lolimit = shift // undef;
   my $hilimit = shift // undef;
+  my $binwidth = shift // undef;
 
   my $pooled_hdata = $self->filecol_hdata()->{'pooled'};
   my @bws = sort( keys %{ BINWIDTHS() } );
-  # (1.0, 1.25, 2.0, 2.5, 4.0, 5.0, 8.0);
-  my ($x_lo, $x_hi) = ($pooled_hdata->min(), $pooled_hdata->max()); 
+  my ($x_lo, $x_hi) = ($pooled_hdata->min(), $pooled_hdata->max()); # the min and max values in the (pooled) data.
   my $n_points = $pooled_hdata->n_points();
 
   my $i5 = int(0.05*$n_points);
   my $i95 = -1*($i5+1);
-  #   print "i5 i95: $i5  $i95 \n";
-  #my ($v5, $v95) = ($pooled_hdata->data_array()->[$i5], $pooled_hdata->data_array()->[$i95]);
-  my $v5 = $pooled_hdata->data_array()->[$i5];
-  my $v95 = $pooled_hdata->data_array()->[$i95];
-   my $range = $pooled_hdata->data_array()->[-1] - $pooled_hdata->data_array()->[0];
-  my $iq1 = int(0.25*$n_points);
-  my $iq3 = $n_points - $iq1 - 1;
- 
+  my ($v5, $v95) = ($pooled_hdata->data_array()->[$i5], $pooled_hdata->data_array()->[$i95]);
+
+  my $X = 2.0;
   my $mid = 0.5*($v5 + $v95);
-  my $v90range = $v95-$v5;
- print "range, v90range: $range $v90range \n";
-  my $half_range = 0.5*(2 * $v90range);
-  my $iqr = $pooled_hdata->data_array()->[$iq3] - $pooled_hdata->data_array()->[$iq1];
-  if( $iqr == 0 ){
-    $iqr = $range;
-    $half_range =  0.5*(2 * $range);
-  }
-  my $FD_bw = 2*$iqr/$n_points**0.3333;
-   print "iqr, etc: $iqr  $n_points  ", $n_points**0.3333, "\n";
-  #   print STDERR "v5 etc.: $v5 $v95
-  my ($lo_limit, $hi_limit) = ($mid - $half_range, $mid + $half_range);
-  $lo_limit = 0 if($x_lo >= 0  and  $lo_limit < 0);
+  my $half_range90 = 0.5*($v95-$v5);
+
+  my ($lo_limit, $hi_limit) = ($mid - $X*$half_range90, $mid + $X*$half_range90);
+  $lo_limit = 0 if($x_lo >= 0  and  $lo_limit < 0); # if all data >=0, x scale doesn't include negatives.
   $self->lo_limit( $lolimit // $lo_limit );
   $self->hi_limit( $hilimit // $hi_limit );
-   
-  # print "hr npts: $half_range  $n_points\n";
-  my $binwidth = $FD_bw;	# 4*$half_range/sqrt($n_points);
-  my $bwf = 0.01;
-print STDERR "XXX $lo_limit  $hi_limit  $binwidth  $bwf \n";
-  print STDERR "in auto bin. data type: ", $self->data_type(), "\n";
-  if (0) {
-    # put into range: [100,1000)
-    while ($binwidth >= 1000) {
-      $binwidth /= 10;
-      $bwf *= 10;
-    }
-    while ($binwidth < 100) {
-      $binwidth *= 10;
-      $bwf /= 10;
-    }
-  } else {
-    ($binwidth, $bwf) = xyz($binwidth);
-  }
 
-  # round binwidth down to nearest 
-  for (my $i = @bws-1; $i >= 0; $i--) {
-    my $bw = $bws[$i];
-    if ($bw <= $binwidth) {
-      $binwidth = $bw;
-      last;
+  if (!defined $binwidth) {
+    $binwidth =  $half_range90/$n_points**0.3333;
+    ($binwidth, my $bwf) = xyz($binwidth);
+    # round binwidth down to nearest allowed value.
+    for (my $i = @bws-1; $i >= 0; $i--) {
+      my $bw = $bws[$i];
+      if ($bw <= $binwidth) {
+	$binwidth = $bw;
+	last;
+      }
+    }
+    $binwidth *= $bwf;
+    if ($self->data_type() eq 'integer') {
+      $binwidth = 1 if ($binwidth < 1);
+      $binwidth = int($binwidth + 0.5);
     }
   }
-
-  $binwidth *= $bwf;
-
-  if ($self->data_type() eq 'integer') {
-    $binwidth = 1 if ($binwidth < 1);
-    $binwidth = int($binwidth + 0.5);
-  }
-
   $self->set_binwidth($binwidth);
-  # $lo_limit = $binwidth * floor( $lo_limit / $binwidth );
-  # $hi_limit = $binwidth * ceil( $hi_limit / $binwidth );
-  # if ($self->data_type() eq 'integer') {
-  #    $lo_limit -= 0.5;
-  #    $hi_limit += 0.5;
-  # }
-  # print STDERR "in auto bin: $lo_limit  $hi_limit  $binwidth \n";
-
-  # $self->lo_limit($lo_limit);
-  # $self->hi_limit($hi_limit);
-  # $self->binwidth($binwidth);
   print "lo, hi: ", $self->lo_limit(), "  ", $self->hi_limit(), "  binwidth: ", $binwidth,  "\n";
 }
 
@@ -428,14 +291,9 @@ sub bin_data{ # populate the bins using existing bin specification (binwidth, et
 
     my @bin_counts = (0) x ($self->n_bins() + 1);
     my @bin_centers = map( $self->lo_limit() + ($_ + 0.5)*$self->binwidth(), (0 .. $self->n_bins() ) );
-    #     print STDERR 'lo_limit: ', $self->lo_limit(), "   bin centers: ", join('  ', @bin_centers), "\n";
     my ($underflow_count, $overflow_count) = (0, 0);
     my ($lo_limit, $hi_limit) = ($self->lo_limit(), $self->hi_limit());
-    #print "datat type: ", $self->data_type(), "\n";
-    # if ($self->data_type eq 'integer') {
-    #    $lo_limit -= 0.5;
-    #    $hi_limit += 0.5;
-    # }
+
     for my $d (@{$hdata->data_array()}) {
       if ($d < $lo_limit) {
 	$underflow_count++;
@@ -478,8 +336,15 @@ sub as_string{
 
   $h_string .= sprintf("# data from file:column                " . "%-18s  " x (@filecol_specs) . "\n", @filecol_specs);
   $h_string .= $horiz_line_string;
-  $h_string .= sprintf("     < %6.4g  (underflow)          ", $self->lo_limit());
 
+  $h_string .= sprintf("      n undefined                   ");
+  for my $fcspec (@filecol_specs) {
+    $h_string .= sprintf("%9.4g           ", $self->filecol_hdata()->{$fcspec}->n_undefined());
+  }
+  $h_string .= "\n";
+  $h_string  .= $horiz_line_string;
+
+  $h_string .= sprintf("     < %6.4g  (underflow)          ", $self->lo_limit());
   for my $fcspec (@filecol_specs) {
     my $val =  $self->filecol_hdata()->{$fcspec}->underflow_count() // 0;
     $fcs_cumulative{$fcspec} += $val;
@@ -549,19 +414,19 @@ sub set_filecol_specs{
   my @filecol_specs = ();
 
   #  my @filecol_specifiers = split(/;/, $self->data_fcol() ); # e.g. '0v1:3,4,5; 0v2:1,5,9' -> ('0v1:3,4,5', '0v2:1,5,9')
-  for my $fcs (split(/;/, $self->data_fcol() )) {
+  for my $fcs (split(/;/, $self->data_fcol() )) { # split on semi-colon for the different input files
     #   $fcs =~ s/\s+//g; # remove whitespace
     print STDERR "fcs: ", $fcs, "\n";
-    my ($f, $cols) = split(':', $fcs);
+    my ($file, $cols) = split(':', $fcs); # split file:spec
     #   my @colspecs = split(',', $cols);
-    my @colspecs = split(/[, ]+/, $cols);
+    my @colspecs = split(/[, ]+/, $cols); # split on , to get column specs (e.g. 9"hgmr"
     for (@colspecs) {
-      my $filecolspec = $f . ':' . $_;
+      my $filecolspec = $file . ':' . $_;
       print STDERR "filecolspec: $filecolspec \n";
-      push @filecol_specs, $f . ':' . $_;
+      push @filecol_specs, $file . ':' . $_;
     }
   }
-  $self->filecol_specifiers( \@filecol_specs );
+  $self->filecol_specifiers( \@filecol_specs ); # example element 'a_filename:8"a_label"', or 'a_filename:10-8'
   #  return \@filecol_specs;
 }
 
@@ -582,4 +447,195 @@ sub xyz{ # express the input number as prod. of 2 factors, one in range [100,100
   return ($x, $f);
 }
 
+
+
+sub read_and_sum_signed{ # signed sum of cols, e.g. 5+8-12  -> add values in cols 5 and 8 and subtract col 12 value.
+  my $data_file = shift;
+  my $histogram_id = shift;
+  my $col_sum_spec = shift;
+  my $filecol_hdata = shift;
+  open my $fh_in, "<", $data_file or die "Couldn't open $data_file for reading.\n";
+
+  # store columns and signs in arrays
+  my @cols_to_sum = ();
+  my @signs = ();
+  if ($col_sum_spec =~ s/(\d+)//) {
+    push @cols_to_sum, $1;
+    push @signs, '+';
+  } else {
+    print STDERR "Expected something like '4+8-5', got $col_sum_spec. Skipping this histogram.\n";
+    return undef;
+  }
+  while ($col_sum_spec =~ s/([+-])(\d+)//) {
+    push @cols_to_sum, $2;
+    push @signs, $1;
+  }
+
+  # read lines store specified value if defined
+  my $integer_data = 1;
+  while (my $line = <$fh_in>) {
+    next if($line =~ /^\s*#/);	# skip comments
+    $line =~ s/^\s+//;		# remove initial whitespace
+    my @columns = split(/\s+/, $line);
+
+    # check whether the values in the specified columns are all defined and numbers
+    my $all_look_like_numbers = 1;
+    for my $cth (@cols_to_sum) {
+      my $data_item = $columns[ $cth - 1 ] // undef;
+      if (defined $data_item  and  looks_like_number($data_item)) {
+	$integer_data = 0 if(! ($data_item =~ /^[+-]?\d+\z/) );
+      } else {
+	$all_look_like_numbers = 0; # specified quantity is not defined for this line
+	last;
+      }
+    }
+
+    # 
+    if ($all_look_like_numbers == 1) {
+      my $value_to_histogram = 0;
+      while (my ($i, $column) = each @cols_to_sum ) {
+	my $sign = $signs[$i];
+	my $data_item = $columns[ $column - 1 ];
+	if ($sign eq '+') {
+	  $value_to_histogram += $data_item;
+	} elsif ($sign eq '-') {
+	  $value_to_histogram -= $data_item;
+	} else {
+	  print STDERR "sign should be + or -, but is: $sign . Skipping this histogram.\n";
+	}
+      }
+      $filecol_hdata->{$histogram_id}->add_value( $value_to_histogram );
+      $filecol_hdata->{'pooled'}->add_value( $value_to_histogram );
+    } else {
+      $filecol_hdata->{$histogram_id}->add_value(undef);
+      $filecol_hdata->{'pooled'}->add_value(undef);
+    }
+  }
+  close($fh_in);
+  return $integer_data;
+}
+
+sub read_and_union{
+  my $data_file = shift;
+  my $histogram_id = shift;
+  my $col_spec = shift;
+  my $filecol_hdata = shift;
+  my @cols_to_histogram = split(/[uU]/, $col_spec);
+  open my $fh_in, "<", $data_file or die "Couldn't open $data_file for reading.\n";
+  my $integer_data = 1;
+  while (my $line = <$fh_in>) {
+    next if($line =~ /^\s*#/);	# skip comments
+    $line =~ s/^\s+//;
+    my @columns = split(/\s+/, $line);
+    for my $cth (@cols_to_histogram ) {
+      my $data_item = $columns[ $cth - 1 ];
+      if (looks_like_number( $data_item ) ) {
+	$integer_data = 0 if(! ($data_item =~ /^[+-]?\d+\z/) );
+	$filecol_hdata->{$histogram_id}->add_value( $data_item );
+	$filecol_hdata->{'pooled'}->add_value( $data_item );
+      } else {
+	$filecol_hdata->{$histogram_id}->add_value(undef);
+	$filecol_hdata->{'pooled'}->add_value(undef);
+      }
+    }
+  }
+  close $fh_in;
+  return $integer_data;
+}
+
 1;
+
+
+# ###### unused ####################
+
+# sub read_and_sum{
+#   my $data_file = shift;
+#   my $histogram_id = shift;
+#   my $cols_to_sum = shift;
+#   my $filecol_hdata = shift;
+#   # my $hdata_obj = shift;
+#   # my $pooled_hdata_obj = shift;
+#   open my $fh_in, "<", $data_file or die "Couldn't open $data_file for reading.\n";
+#   my $integer_data = 1;
+
+#   #open my $fh_in, "<", $datafile or die "Couldn't open $datafile for reading.\n";
+#   while (my $line = <$fh_in>) {
+#     next if($line =~ /^\s*#/);	# skip comments
+#     $line =~ s/^\s+//;
+#     #   $line =~ s/\s+$//;
+#     my @columns = split(/\s+/, $line);
+#     # print "\n\nline: $line \n";
+#     # print "cols to sum: ", join(", ", @$cols_to_sum), "\n";
+
+#     my $all_look_like_numbers = 1;
+#     for my $cth (@$cols_to_sum) {
+#       my $data_item = $columns[ $cth - 1 ] // undef;
+#       #  print "cth $cth  data_item $data_item \n";
+      
+#       if (defined $data_item  and  looks_like_number($data_item)) {
+# 	$integer_data = 0 if(! ($data_item =~ /^[+-]?\d+\z/) );
+#       } else {
+# 	$all_look_like_numbers = 0;
+# 	last;
+#       }
+#     }
+#     #  print "all_loook_like_numbers: $all_look_like_numbers \n";
+#     if ($all_look_like_numbers == 1) {
+#       my $value_to_histogram = 0;
+#       while (my ($i, $cth) = each @$cols_to_sum ) {
+
+# 	my $data_item = $columns[ $cth - 1 ];
+# 	#		print "cth $cth   data item:  $data_item \n";
+# 	$value_to_histogram += $data_item;
+#       }
+#       #   print STDERR "histogram_id: [$histogram_id]\n";
+#       $filecol_hdata->{$histogram_id}->
+# 	# $hdata_obj->
+# 	add_value( $value_to_histogram );
+#       $filecol_hdata->{'pooled'}->
+# 	# $pooled_hdata_obj->
+# 	add_value( $value_to_histogram );
+#     } else {
+#       # $value_to_histogram = undef;
+#     }
+#   }
+#   close($fh_in);
+#   return $integer_data;
+# }
+
+# sub read_and_diff{
+#   my $data_file = shift;
+#   my $histogram_id = shift;
+#   my @cols_to_diff = @{my $cols2diff = shift};
+#   my $filecol_hdata = shift;
+#   if (scalar @cols_to_diff != 2) {
+#     print STDERR "Can only take the difference of 2 columns. Skipping histogram $histogram_id.\n";
+#   }
+#   print STDERR "In read_and_diff; cols to diff: ", join(", ", @cols_to_diff), "\n";
+ 
+#   open my $fh_in, "<", $data_file or die "Couldn't open $data_file for reading.\n";
+#   my $integer_data = 1;
+
+#   while (my $line = <$fh_in>) {
+#     next if($line =~ /^\s*#/);	       # skip comments
+#     $line =~ s/^\s+//;		       # remove initial whitespace
+#     my @columns = split(/\s+/, $line); # split on whitespace
+#     my $data_item0 = $columns[$cols_to_diff[0] - 1];
+#     my $data_item1 = $columns[$cols_to_diff[1] - 1];
+#     if (looks_like_number($data_item0)  and  looks_like_number($data_item1)) {
+#       if ($integer_data == 1) {
+# 	$integer_data = 0 if(! ($data_item0 =~ /^[+-]?\d+\z/  and  $data_item1 =~ /^[+-]?\d+\z/) );
+#       }
+#       my $value_to_histogram = $data_item0 - $data_item1;
+#       print STDERR "histogram_id: [$histogram_id]\n";
+#       $filecol_hdata->{$histogram_id}->add_value( $value_to_histogram );
+#       $filecol_hdata->{'pooled'}->add_value( $value_to_histogram );
+#     } else {
+#       #   $value_to_histogram = undef; # 
+#     }
+   
+#   }
+#   close($fh_in);
+#   return $integer_data;
+# }
+
