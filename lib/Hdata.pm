@@ -23,10 +23,16 @@ has data_array => (
 ######  summary statistics (mean, stddev, etc.) #########################
 
 has n_points => (
-                 isa => 'Maybe[Int]',
+                 isa => 'Int',
                  is => 'rw',
-                 default => undef,
-                );
+                 default => 0,
+    );
+
+has n_undefined => (
+    isa => 'Int',
+    is => 'rw',
+    default => 0,
+    );
 
 has min => (
              isa => 'Maybe[Num]',
@@ -104,9 +110,13 @@ has overflow_count => (
 sub add_value{
    my $self = shift;
    my $value = shift;
+   if(defined $value){
    push @{$self->data_array()}, $value;
    $self->{sum} += $value;
    $self->{sumsqr} += $value*$value;
+   }else{
+       $self->{n_undefined}++;
+   }
 }
 
 sub sort_etc{
