@@ -57,6 +57,12 @@ c:2<enter>	  coarsen by 2 units
 You can toggle between linear and logarithmic vertical scales like this:
 ll<enter>
 
+You can label the x-axis:
+xlabel:'mass (kg)'<enter>
+
+You can also combine two or more of these modifying commands on one line by separating with ';'. E.g.:
+
+r:3;hi:0.3;ll<enter>
 
 ##########
 
@@ -97,6 +103,10 @@ However we can specify labels on the command line by putting the desired label t
 histogram.pl -i 'a_file:4+5"hamsters";another_file:4+5"gerbils"'
 
 
+##########   exporting   ##########
+You can export to a png file:
 
+export:'mass_distribution'<enter>
 
+This will created a file 'mass_distribution.png' containing the histogram plot.
 
