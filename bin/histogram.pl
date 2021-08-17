@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use Getopt::Long;
 use Graphics::GnuplotIF qw(GnuplotIF);
-use Math::GSL::SF  qw( :all );
+# use Math::GSL::SF  qw( :all );
 
 use File::Basename 'dirname';
 use Cwd 'abs_path';
@@ -50,8 +50,8 @@ use Histograms;
 	    );
 
   print "files&columns to histogram: [$data] \n";
- my @plot_titles = ($data =~ /\"([^"]+)\"/g);
-  print "plot_titles:  ", join("  ", @plot_titles), "\n";
+ #my @plot_titles = ($data =~ /\"([^"]+)\"/g); # assumes all have a title in "", otherwise misdistributes them -- improve this!
+ # print "plot_titles:  ", join("  ", @plot_titles), "\n";
 #  $data =~ s/\"([^"]+)\"//g;
   
   my $histogram_obj = Histograms->new({
@@ -83,7 +83,7 @@ use Histograms;
   $plot->gnuplot_cmd('set tics scale 2,1');
   $plot->gnuplot_cmd($gnuplot_command) if(defined $gnuplot_command);
   #  $plot->gnuplot_cmd('set tics out');
-  $plot->gnuplot_set_plot_titles(@plot_titles);
+  # $plot->gnuplot_set_plot_titles(@plot_titles);
 
   plot_the_plot($histogram_obj, $plot) if($do_plot);
 
@@ -215,6 +215,7 @@ sub plot_the_plot{
   # my @plot_titles = map("$_", @{$histogram_obj->filecol_specifiers()} );
   # print STDERR "plot titles:  ", join("  ", @plot_titles), "\n";
   # $plot_obj->gnuplot_set_plot_titles(@plot_titles);
+  my @plot_titles = ();
 
 
   my @histo_bin_counts = ();
@@ -225,7 +226,9 @@ sub plot_the_plot{
     if ($plt == 1) {
       print STDERR "adding histogram w index $hi.\n";
       my $fcspec = $histogram_obj->filecol_specifiers()->[$hi];
-      my $bincounts = $histogram_obj->filecol_hdata()->{$fcspec}->bin_counts();
+      my $hdata_obj = $histogram_obj->filecol_hdata()->{$fcspec};
+      my $bincounts = $hdata_obj->bin_counts();
+      push @plot_titles, $hdata_obj->label();
    #   print STDERR "Bincounts: $hi  ", "n bins: ", scalar @$bincounts, "  ", join(" ", @$bincounts), "\n";
       push @histo_bin_counts, $bincounts; # push an array ref holding the bin counts ...
  #     push @histo_bin_counts_w_styles, {y_values => $bincounts, style_spec => "t'description'"};
@@ -236,6 +239,7 @@ sub plot_the_plot{
   #   print STDERR "bincounts: [", join("|", @$hbc), "]\n";
   # }
   #print STDERR "Bin_centers  ", scalar @$bin_centers, "  ", join(" ", @$bin_centers), "\n";
+  $plot_obj->gnuplot_set_plot_titles(@plot_titles);
   $plot_obj->gnuplot_plot_xy($bin_centers, @histo_bin_counts); # , $bin_counts);
 #  $plot_obj->gnuplot_plot_xy_style($bin_centers, @histo_bin_counts_w_styles);
   
