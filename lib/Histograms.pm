@@ -106,6 +106,14 @@ has n_bins => (
                required => 0,
 	       default => undef,
               );
+
+has titles => (
+	       isa => 'Maybe[ArrayRef[Str]]',
+	       is => 'rw',
+	       required => 0,
+	       default => undef,
+	      );
+
 #########################################################################
 
 
@@ -123,12 +131,12 @@ sub BUILD{
   my @histos_to_plot = ((1) x scalar @{$self->filecol_specifiers()});
   $self->histograms_to_plot(\@histos_to_plot); # default to plotting all (but not pooled)
   $self->load_data_from_file();
-  print $self->lo_limit() // 'undef', " ", $self->binwidth() // 'undef', " ", $self->hi_limit() // 'undef', "\n";
+  print "lo_limit, binwidth, hi_limit: ",  $self->lo_limit() // 'undef', " ", $self->binwidth() // 'undef', " ", $self->hi_limit() // 'undef', "\n";
 
   #  if (!(defined $self->lo_limit()  and  defined $self->hi_limit()  and  defined  $self->binwidth())) 
-  if (1 or !defined $self->binwidth()) {
-    $self->auto_bin($self->lo_limit(), $self->hi_limit(), $self->binwidth());
-  }
+  # if (1 or !defined $self->binwidth()) {
+  $self->auto_bin($self->lo_limit(), $self->hi_limit(), $self->binwidth());
+  # }
 
   my $n_bins = int( ($self->hi_limit() - $self->lo_limit())/$self->binwidth() ) + 1;
   $self->n_bins($n_bins);
@@ -143,21 +151,24 @@ sub load_data_from_file{
   my %filecol_hdata = ('pooled' => Hdata->new());
 
   my $integer_data = 1;
-
+  #my @histogram_titles = ();
+  #  print "AAAAAAAAAAAAAAAAAA\n";
   for my $histogram_id (@{$self->filecol_specifiers()}) { # $histogram_id e.g. 'file_x:4' or 'file_x:5+6"sum_of_5and6"'
     $filecol_hdata{$histogram_id} = Hdata->new();
-    if ($histogram_id =~ /^([^:]+)[:](\S+)/) { # 
-      my ($datafile, $csth) = ($1, $2); # $csth is columns specifier, e.g. 8 or 8+10 or 8u3 = 9-2"x-z"
-      print STDERR "before: [$csth] \n";
-      my $label = ($csth =~ s/\" (\S+) \"//x)? $1 : $histogram_id; # capture label and delete from $csth
-      print STDERR "after: [$csth]       [$label]\n\n";
-
-      if ($csth =~ /^\d+([+-]\d+)*$/) {
-	$integer_data = read_and_sum_signed($datafile, $histogram_id, $csth, \%filecol_hdata);
-      } elsif ($csth =~ /^\d+(u\d+)*$/) {
-	$integer_data = read_and_union($datafile, $histogram_id, $csth, \%filecol_hdata);
+    #   print "histogram id: [$histogram_id] \n";
+    if ($histogram_id =~ /^([^:]+) [:] (.*) /x) { #
+      my ($datafile, $col_specifier) = ($1, $2); # $col_specifier is columns specifier, e.g. 8 or 8+10 or 8u3 = 9-2"x-z"
+      my $label = ($col_specifier =~ s/\" (.*) \"//x)? $1 : $histogram_id; # capture label and delete from $col_specifier
+      $filecol_hdata{$histogram_id}->label($label);
+      $col_specifier =~ s/\s+//g;
+      if ($col_specifier =~ /^\d+([+-]\d+)*$/) {
+	$integer_data = read_and_sum_signed($datafile, $histogram_id, $col_specifier, \%filecol_hdata);
+      } elsif ($col_specifier =~ /^\d+(u\d+)*$/) {
+	$integer_data = read_and_union($datafile, $histogram_id, $col_specifier, \%filecol_hdata);
+      } elsif ($col_specifier =~ /^\d+[\/]\d+$/) {
+	$integer_data = read_and_divide($datafile, $histogram_id, $col_specifier, \%filecol_hdata);
       } else {
-	print STDERR "Unrecognized column and operation specification: $csth. Skipping histogram $histogram_id\n";
+	print STDERR "Unrecognized column and operation specification: $col_specifier. Skipping histogram $histogram_id\n";
       }
     }
   }
@@ -416,13 +427,13 @@ sub set_filecol_specs{
   #  my @filecol_specifiers = split(/;/, $self->data_fcol() ); # e.g. '0v1:3,4,5; 0v2:1,5,9' -> ('0v1:3,4,5', '0v2:1,5,9')
   for my $fcs (split(/;/, $self->data_fcol() )) { # split on semi-colon for the different input files
     #   $fcs =~ s/\s+//g; # remove whitespace
-    print STDERR "fcs: ", $fcs, "\n";
+    # print STDERR "fcs: ", $fcs, "\n";
     my ($file, $cols) = split(':', $fcs); # split file:spec
     #   my @colspecs = split(',', $cols);
-    my @colspecs = split(/[, ]+/, $cols); # split on , to get column specs (e.g. 9"hgmr"
+    my @colspecs = split(/[,]+/, $cols); # split on , to get column specs (e.g. 9"hgmr"
     for (@colspecs) {
-      my $filecolspec = $file . ':' . $_;
-      print STDERR "filecolspec: $filecolspec \n";
+      #    my $filecolspec = $file . ':' . $_;
+      #   print STDERR "filecolspec: [$filecolspec] \n";
       push @filecol_specs, $file . ':' . $_;
     }
   }
@@ -502,6 +513,7 @@ sub read_and_sum_signed{ # signed sum of cols, e.g. 5+8-12  -> add values in col
 	  $value_to_histogram -= $data_item;
 	} else {
 	  print STDERR "sign should be + or -, but is: $sign . Skipping this histogram.\n";
+	  return undef;
 	}
       }
       $filecol_hdata->{$histogram_id}->add_value( $value_to_histogram );
@@ -541,6 +553,35 @@ sub read_and_union{
   }
   close $fh_in;
   return $integer_data;
+}
+
+sub read_and_divide{ # divide the value in one column by the value in another
+  my $data_file = shift;
+  my $histogram_id = shift;
+  my $col_spec = shift;
+  my $filecol_hdata = shift;
+  my @cols_to_use = split(/[\/]/, $col_spec);
+  if (scalar @cols_to_use != 2) {
+    print STDERR "$col_spec has problem. Only one divisor allowed. Skipping this histogram.\n";
+    return undef;
+  }
+  my ($numer_col, $denom_col) = @cols_to_use;
+  
+  open my $fh_in, "<", $data_file or die "Couldn't open $data_file for reading.\n";
+  while (my $line = <$fh_in>) {
+    next if($line =~ /^\s*#/);	# skip comments
+    $line =~ s/^\s+//;
+    my @columns = split(/\s+/, $line);
+    my ($numerator, $denominator) = ($columns[$numer_col-1] // undef, $columns[$denom_col-1] // undef);
+    if (defined $numerator and defined $denominator and looks_like_number($numerator) and looks_like_number($denominator)) {
+      my $value_to_histogram = ($denominator == 0)? undef : $numerator/$denominator;
+      print "n, d, n/d:  $numerator $denominator  $value_to_histogram\n";
+      $filecol_hdata->{$histogram_id}->add_value($value_to_histogram);
+      $filecol_hdata->{'pooled'}->add_value($value_to_histogram);
+    }
+  }
+  close $fh_in;
+  return 0;
 }
 
 1;
