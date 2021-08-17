@@ -1,0 +1,102 @@
+histogram.pl is a perl script for generating and plotting histograms.
+
+It depends on Histogram.pm and Hdata.pm in this repository,
+and on Graphics::GnuplotIF , available from cpan.
+
+##########   Basic usage:   ##########
+
+histogram.pl -i 'a_data_file:4'
+
+This would generate and plot a histogram of the values in column 4 (unit based) of
+the file 'a_data_file'. Lower & upper bounds and the bin-width would be set automatically.
+
+You can also specify explicity any combination of the lower bound, upper bound, and bin-width
+on the command line. E.g.:
+
+histogram.pl -i 'a_data_file:4' -low 0 -hi 0.5 -bw 0.005
+
+In this case there would 100 bins covering the range from 0 to 0.5. Values < 0 would be considered
+'underflow' and values > 0.5 would be considered 'overflow'. The numbers of under- and over-flow values
+are not shown graphically but are included in the tabular representation of the histograms which is also
+output.
+
+Whichever of these parameters are not specified on the command line will be set automatically.
+
+Muliple histograms can be displayed on the same plot. E.g.:
+
+histogram.pl -i 'a_data_file:4,11'
+
+would display 2 histograms, one with col. 4 data, and the other with col. 11 data.
+
+In addition to being plotted, the histograms are output in text form as a table giving for each bin
+the limits of the bin, and the number of counts of each histogram in the bin, as well as the
+cumulative counts in all bins up to and including that bin, and including the underflow.
+
+##########   Modifying the plot   ###########
+
+If, upon viewing the plot, you don't like the binning, or the range of values shown, you can modify
+these and other parameters:
+
+First close the window displaying the plot with q<enter>.
+
+Then, for example:
+bw:0.001<enter>   set the bin-width to 0.001
+
+lo:-0.2<enter>    set the lower limit of the histograms to -0.2
+
+hi:10<enter>	  set the upper limit of the histograms to 10
+
+Changing any of these parameters causes the binning of the data points to be repeated with
+the new parameter values.
+
+Instead of explicitly specifying a new bin-width, you can use 'r' (refine) or 'c' (coarsen). E.g.:
+r<enter>   	  refine by one unit
+r:3<enter> 	  refine by 3 units 
+c:2<enter>	  coarsen by 2 units
+
+You can toggle between linear and logarithmic vertical scales like this:
+ll<enter>
+
+
+##########
+
+You can plot multiple histograms of data from different files:
+histogram.pl -i 'a_file:4,5;another_file:7;yet_another_file:3'
+
+
+You can histogram the sum of 2 or more columns:
+
+histogram.pl -i 'a_file:4+5'
+histogram.pl -i 'a_file:11+4+5'
+
+You can also subtract rather than add values from some columns:
+
+histogram.pl -i 'a_file:8-9+3'
+
+(However no sign is allowed in front of the first column specified.)
+
+
+To histogram the quotient of two columns:
+
+histogram.pl -i 'a_file:10/3'
+
+
+To histogram the union of the sets of values in 2 or more columns:
+
+histogram.pl -i 'a_file:3u5u7'
+
+##########   labels   ##########
+
+By default the plot will have a key with labels for each histogram based on the specification
+of file, columns, operations, etc. on the command line. E.g.:
+histogram.pl -i 'a_file:4+5;another_file:8-10'
+would have 'a_file:4+5'  as one label, and 'another_file:8-10' as the other label.
+
+However we can specify labels on the command line by putting the desired label text in double quotes. E.g.:
+
+histogram.pl -i 'a_file:4+5"hamsters";another_file:4+5"gerbils"'
+
+
+
+
+
