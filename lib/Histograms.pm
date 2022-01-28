@@ -575,7 +575,7 @@ sub read_and_divide{ # divide the value in one column by the value in another
     my ($numerator, $denominator) = ($columns[$numer_col-1] // undef, $columns[$denom_col-1] // undef);
     if (defined $numerator and defined $denominator and looks_like_number($numerator) and looks_like_number($denominator)) {
       my $value_to_histogram = ($denominator == 0)? undef : $numerator/$denominator;
-      print "n, d, n/d:  $numerator $denominator  $value_to_histogram\n";
+    #  print "n, d, n/d:  $numerator $denominator  $value_to_histogram\n";
       $filecol_hdata->{$histogram_id}->add_value($value_to_histogram);
       $filecol_hdata->{'pooled'}->add_value($value_to_histogram);
     }
