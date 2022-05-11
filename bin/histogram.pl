@@ -33,7 +33,10 @@ use Histograms;
   my $gnuplot_command = undef;
   my $linewidth = 1.5;
   my $terminal = 'x11';
-
+  my $ymin = "*";
+  my $ymax = "*";
+  my $ymax_log = "*";
+  my $ymin_log = 0.8;
   GetOptions(
 	     'data|input=s' => \$data,
 	     #             'input_filename=s' => \$input_filename,
@@ -121,11 +124,29 @@ use Histograms;
 	  if ($log_y) {
 	    $log_y = 0;
 	    $plot->gnuplot_cmd('unset log');
-	    $plot->gnuplot_set_yrange('*', '*');
+	    $plot->gnuplot_set_yrange($ymin, $ymax);
 	  } else {
 	    $log_y = 1;
 	    $plot->gnuplot_cmd('set log y');
-	    $plot->gnuplot_set_yrange(0.8, '*');
+	    $plot->gnuplot_set_yrange($ymin_log, $ymax_log);
+	  }
+	} elsif ($cmd eq 'ymax'){
+	  if (!$log_y) {
+	    $ymax = $param;
+	    print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
+	    $plot->gnuplot_set_yrange($ymin, $ymax);
+	  } else {
+	    $ymax_log = $param;
+	    $plot->gnuplot_set_yrange($ymin_log, $ymax_log);
+	  }
+	} elsif ($cmd eq 'ymin'){
+	  if (!$log_y) {
+	    $ymin = $param;
+	    print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
+	    $plot->gnuplot_set_yrange($ymin, $ymax);
+	  } else {
+	    $ymin_log = $param;
+	    $plot->gnuplot_set_yrange($ymin_log, $ymax_log);
 	  }
 	} elsif ($cmd eq 'x') { # expand (or contract) x range.
 	  $histogram_obj->expand_range($param);
