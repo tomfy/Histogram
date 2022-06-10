@@ -7,7 +7,7 @@ and on Graphics::GnuplotIF , available from cpan.
 
 histogram.pl -i 'a_data_file:4'
 
-This would generate and plot a histogram of the values in column 4 (unit based) of
+This would generate and plot a histogram of the values in column 4 (the left-most column being column 1) of
 the file 'a_data_file'. Lower & upper bounds and the bin-width would be set automatically.
 
 You can also specify explicity any combination of the lower bound, upper bound, and bin-width
@@ -22,7 +22,7 @@ output.
 
 Whichever of these parameters are not specified on the command line will be set automatically.
 
-Muliple histograms can be displayed on the same plot. E.g.:
+Multiple histograms can be displayed on the same plot. E.g.:
 
 histogram.pl -i 'a_data_file:4,11'
 
@@ -113,4 +113,10 @@ You can export to a png file:
 export:'mass_distribution'<enter>
 
 This will created a file 'mass_distribution.png' containing the histogram plot.
+
+##########   general gnuplot commands   ##########
+You can modify the plot with other gnuplot commands. For example:
+
+cmd:'set grid'<enter>
+cmd:'set key left'<enter>
 
