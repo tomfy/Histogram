@@ -167,6 +167,10 @@ sub load_data_from_file{
 	$integer_data = read_and_union($datafile, $histogram_id, $col_specifier, \%filecol_hdata);
       } elsif ($col_specifier =~ /^\d+[\/]\d+$/) {
 	$integer_data = read_and_divide($datafile, $histogram_id, $col_specifier, \%filecol_hdata);
+      } elsif ($col_specifier =~ /^\d+[\*]\d+$/) {
+	$integer_data = read_and_multiply($datafile, $histogram_id, $col_specifier, \%filecol_hdata);
+	  } elsif ($col_specifier =~ /^log\d+$/) {
+	$integer_data = read_and_log($datafile, $histogram_id, $col_specifier, \%filecol_hdata);
       } else {
 	print STDERR "Unrecognized column and operation specification: $col_specifier. Skipping histogram $histogram_id\n";
       }
@@ -583,6 +587,66 @@ sub read_and_divide{ # divide the value in one column by the value in another
   close $fh_in;
   return 0;
 }
+
+sub read_and_multiply{ # multiply the value in one column by the value in another
+  my $data_file = shift;
+  my $histogram_id = shift;
+  my $col_spec = shift;
+  my $filecol_hdata = shift;
+  my @cols_to_use = split(/[\*]/, $col_spec);
+  if (scalar @cols_to_use != 2) {
+    print STDERR "$col_spec has problem. Only two factors allowed. Skipping this histogram.\n";
+    return undef;
+  }
+  my ($factor1_col, $factor2_col) = @cols_to_use;
+
+  open my $fh_in, "<", $data_file or die "Couldn't open $data_file for reading.\n";
+  while (my $line = <$fh_in>) {
+    next if($line =~ /^\s*#/);	# skip comments
+    $line =~ s/^\s+//;
+    my @columns = split(/\s+/, $line);
+    my ($factor1, $factor2) = ($columns[$factor1_col-1] // undef, $columns[$factor2_col-1] // undef);
+    if (defined $factor1 and defined $factor2 and looks_like_number($factor1) and looks_like_number($factor2)) {
+      my $value_to_histogram = $factor1*$factor2;
+    #  print "n, d, n*d:  $factor1 $factor2  $value_to_histogram\n";
+      $filecol_hdata->{$histogram_id}->add_value($value_to_histogram);
+      $filecol_hdata->{'pooled'}->add_value($value_to_histogram);
+    }
+  }
+  close $fh_in;
+  return 0;
+}
+
+sub read_and_log{ # multiply the value in one column by the value in another
+  my $data_file = shift;
+  my $histogram_id = shift;
+  my $col_spec = shift;
+  my $filecol_hdata = shift;
+  my $col_to_use;
+  if ($col_spec =~ /^log(\d+)/) {
+    $col_to_use = $1;
+  } else {
+    print STDERR "$col_spec has problem. Should be something like log13 for log of value in col 13. Skipping this histogram.\n";
+    return undef;
+  }
+
+  open my $fh_in, "<", $data_file or die "Couldn't open $data_file for reading.\n";
+  while (my $line = <$fh_in>) {
+    next if($line =~ /^\s*#/);	# skip comments
+    $line =~ s/^\s+//;
+    my @columns = split(/\s+/, $line);
+    my $arg = ($columns[$col_to_use-1] // undef);
+    if (defined $arg and looks_like_number($arg) and $arg > 0) {
+      my $value_to_histogram = log($arg);
+    #  print "n, d, n*d:  $factor1 $factor2  $value_to_histogram\n";
+      $filecol_hdata->{$histogram_id}->add_value($value_to_histogram);
+      $filecol_hdata->{'pooled'}->add_value($value_to_histogram);
+    }
+  }
+  close $fh_in;
+  return 0;
+}
+
 
 1;
 
