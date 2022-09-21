@@ -131,11 +131,13 @@ sub BUILD{
   my @histos_to_plot = ((1) x scalar @{$self->filecol_specifiers()});
   $self->histograms_to_plot(\@histos_to_plot); # default to plotting all (but not pooled)
   $self->load_data_from_file();
-  print "lo_limit, binwidth, hi_limit: ",  $self->lo_limit() // 'undef', " ", $self->binwidth() // 'undef', " ", $self->hi_limit() // 'undef', "\n";
+  print "lo_limit, hi_limit, binwidth: ",  $self->lo_limit() // 'undef', " ", $self->hi_limit() // 'undef', " ", $self->binwidth() // 'undef', "\n";
 
   #  if (!(defined $self->lo_limit()  and  defined $self->hi_limit()  and  defined  $self->binwidth())) 
   # if (1 or !defined $self->binwidth()) {
-  $self->auto_bin($self->lo_limit(), $self->hi_limit(), $self->binwidth());
+  if(!(defined $self->lo_limit()  and  defined $self->hi_limit()  and  defined  $self->binwidth())){
+    $self->auto_bin($self->lo_limit(), $self->hi_limit(), $self->binwidth());
+  }
   # }
 
   my $n_bins = int( ($self->hi_limit() - $self->lo_limit())/$self->binwidth() ) + 1;
@@ -228,7 +230,7 @@ sub auto_bin{			# automatically choose binwidth, etc.
     }
   }
   $self->set_binwidth($binwidth);
-  print "lo, hi: ", $self->lo_limit(), "  ", $self->hi_limit(), "  binwidth: ", $binwidth,  "\n";
+  print "lo_limit, hi_limit, binwidth from auto_bin: ", $self->lo_limit(), "  ", $self->hi_limit(), "  ", $binwidth,  "\n";
 }
 
 sub change_range{
@@ -321,9 +323,10 @@ sub bin_data{ # populate the bins using existing bin specification (binwidth, et
 	# $bin_centers[$bin_number] = ($bin_number+0.5)*$self->binwidth()
       }
     }
+    my $log0count = $self->filecol_hdata()->{$col}->log0_count();
     $self->filecol_hdata()->{$col}->bin_counts( \@bin_counts );
     $self->filecol_hdata()->{$col}->bin_centers( \@bin_centers );
-    $self->filecol_hdata()->{$col}->underflow_count( $underflow_count );
+    $self->filecol_hdata()->{$col}->underflow_count( $underflow_count + $log0count );
     $self->filecol_hdata()->{$col}->overflow_count( $overflow_count );
   }
 }
@@ -404,23 +407,30 @@ sub as_string{
   #  for (@col_specs) {
   for my $fcspec (@filecol_specs) {
     my ($f, $cspec) = split(':', $fcspec);
-    print STDERR "f cspec:  ", $f // 'undef', "  ", $cspec // 'undef', "\n";
+  #  print STDERR "f cspec:  ", $f // 'undef', "  ", $cspec // 'undef', "\n";
     $cspec = '' if(!defined $cspec);
     my @colspecs = split(',', $cspec);
     for my $csp (@colspecs) {
       my $fc = $f . ':' . $csp;
-      $h_string .= sprintf("# file:col %10s  n points: %5d   ", $fc, $self->filecol_hdata()->{$fc}->n_points());
-      $h_string .= sprintf("mean: %9.4g   stddev: %9.4g   stderr: %9.4g\n",
-			   $self->filecol_hdata()->{$fc}->mean(),
-			   $self->filecol_hdata()->{$fc}->stddev(),
-			   $self->filecol_hdata()->{$fc}->stderr);
+ #     print STDERR "$fcspec  $fc \n";
+      my $the_fchd = $self->filecol_hdata()->{$fc};
+      $h_string .= sprintf("# file:col %10s  n points: %5d   ", $fc,
+			   # $self->filecol_hdata()->{$fc}->n_points());
+			   $the_fchd->n_points());
+      $h_string .= sprintf("mean: %9.4g   stddev: %9.4g   stderr: %9.4g   median: %9.4g\n",
+			   $the_fchd->mean(),
+			   $the_fchd->stddev(),
+			   $the_fchd->stderr(),
+			   $the_fchd->median());
+      
     }
   }
   $h_string .= sprintf("# pooled               n points: %5d   ", $self->filecol_hdata()->{pooled}->n_points());
-  $h_string .= sprintf("mean: %9.4g   stddev: %9.4g   stderr: %9.4g\n",
+  $h_string .= sprintf("mean: %9.4g   stddev: %9.4g   stderr: %9.4g   median: %9.4g\n",
 		       $self->filecol_hdata()->{pooled}->mean(),
 		       $self->filecol_hdata()->{pooled}->stddev(),
-		       $self->filecol_hdata()->{pooled}->stderr);
+		       $self->filecol_hdata()->{pooled}->stderr(),
+		       $self->filecol_hdata()->{pooled}->median() );
   return $h_string;
 }
 
@@ -582,6 +592,9 @@ sub read_and_divide{ # divide the value in one column by the value in another
     #  print "n, d, n/d:  $numerator $denominator  $value_to_histogram\n";
       $filecol_hdata->{$histogram_id}->add_value($value_to_histogram);
       $filecol_hdata->{'pooled'}->add_value($value_to_histogram);
+    }else{
+      $filecol_hdata->{$histogram_id}->add_value(undef);
+      $filecol_hdata->{'pooled'}->add_value(undef);
     }
   }
   close $fh_in;
@@ -611,13 +624,17 @@ sub read_and_multiply{ # multiply the value in one column by the value in anothe
     #  print "n, d, n*d:  $factor1 $factor2  $value_to_histogram\n";
       $filecol_hdata->{$histogram_id}->add_value($value_to_histogram);
       $filecol_hdata->{'pooled'}->add_value($value_to_histogram);
+    }else{
+      $filecol_hdata->{$histogram_id}->add_value(undef);
+      $filecol_hdata->{'pooled'}->add_value(undef);
     }
   }
   close $fh_in;
   return 0;
 }
 
-sub read_and_log{ # multiply the value in one column by the value in another
+sub read_and_log{	  # take the log of value in the column
+  # if value is 0, should count as 'underflow'
   my $data_file = shift;
   my $histogram_id = shift;
   my $col_spec = shift;
@@ -636,11 +653,24 @@ sub read_and_log{ # multiply the value in one column by the value in another
     $line =~ s/^\s+//;
     my @columns = split(/\s+/, $line);
     my $arg = ($columns[$col_to_use-1] // undef);
-    if (defined $arg and looks_like_number($arg) and $arg > 0) {
-      my $value_to_histogram = log($arg);
-    #  print "n, d, n*d:  $factor1 $factor2  $value_to_histogram\n";
-      $filecol_hdata->{$histogram_id}->add_value($value_to_histogram);
-      $filecol_hdata->{'pooled'}->add_value($value_to_histogram);
+    	print "col_spec:  $col_spec  arg:  $arg \n";
+    if (defined $arg and looks_like_number($arg)) {
+      if ($arg > 0) {
+	my $value_to_histogram = log($arg);
+	#  print "n, d, n*d:  $factor1 $factor2  $value_to_histogram\n";
+	$filecol_hdata->{$histogram_id}->add_value($value_to_histogram);
+	$filecol_hdata->{'pooled'}->add_value($value_to_histogram);
+      } elsif ($arg == 0) {
+#	die;
+	$filecol_hdata->{$histogram_id}->add_to_log0_count(1);
+	$filecol_hdata->{'pooled'}->add_to_log0_count(1);
+      } else {
+	$filecol_hdata->{$histogram_id}->add_value(undef);
+	$filecol_hdata->{'pooled'}->add_value(undef);
+      }
+    } else {
+      $filecol_hdata->{$histogram_id}->add_value(undef);
+      $filecol_hdata->{'pooled'}->add_value(undef);
     }
   }
   close $fh_in;

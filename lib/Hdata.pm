@@ -9,8 +9,8 @@ use Scalar::Util qw (looks_like_number );
 use List::Util qw ( min max sum );
 use POSIX qw ( floor ceil );
 
-# to hold the data from (typically) one column, together with
-# mean, stddev, etc.
+# to hold the data for one histogram (typically from one column, but could depend on >1 col),
+# together with mean, stddev, etc.
 
 # data values, sorted but not binnedx
 
@@ -18,7 +18,14 @@ has data_array => (
                   isa => 'ArrayRef',
                   is => 'rw',
                   default => sub { [] },
-);
+		  );
+
+has log0_count => ( # if histogramming log of col values, this counts occurences of value=0
+		   # these will be added to the underflow bin
+		   isa => 'Num',
+		   is => 'rw',
+		   default => 0
+		   );
 
 ######  summary statistics (mean, stddev, etc.) #########################
 
@@ -145,15 +152,37 @@ sub sort_etc{
       $self->stddev( $stddev );
       $self->stderr( $stderr );
 
-      if ($n_points % 2 == 0) {
-         my $mid = int($n_points/2);
-         $self->median( 0.5*($self->{data_array}->[$mid] + $self->{data_array}->[$mid+1]) );
-      } else {
-         $self->median( $self->{data_array}->[ int($n_points/2) ] );
-      }
+      $self->median( $self->calculate_median() );
+      # if ($n_points % 2 == 0) {
+      #    my $mid = int($n_points/2);
+      #    $self->median( 0.5*($self->{data_array}->[$mid] + $self->{data_array}->[$mid+1]) );
+      # } else {
+      #    $self->median( $self->{data_array}->[ int($n_points/2) ] );
+      # }
 
    }
+ }
+
+sub add_to_log0_count{
+  my $self = shift;
+  my $increment = shift // 1;
+  $self->{log0_count} += $increment;
 }
 
+sub calculate_median{
+  my $self = shift;
+  # if histogramming log of values, include log(0) pts in count for median:
+  my $median_n_points = $self->n_points() + $self->log0_count();
+  my $median_index;
+  my $median = undef;
+  if($median_n_points % 2 == 0){ # even
+    $median_index = $median_n_points/2 - $self->log0_count();
+    $median = 0.5*($self->{data_array}->[$median_index] + $self->{data_array}->[$median_index-1]) if($median_index >= 0);
+  }else{
+    my $median_index = ($median_n_points-1)/2 - $self->log0_count();
+    $median = $self->{data_array}->[$median_index] if($median_index >= 0);
+  }
+  return $median;
+}
 
 1;
