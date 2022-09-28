@@ -653,7 +653,7 @@ sub read_and_log{	  # take the log of value in the column
     $line =~ s/^\s+//;
     my @columns = split(/\s+/, $line);
     my $arg = ($columns[$col_to_use-1] // undef);
-    	print "col_spec:  $col_spec  arg:  $arg \n";
+    #	print "col_spec:  $col_spec  arg:  $arg \n";
     if (defined $arg and looks_like_number($arg)) {
       if ($arg > 0) {
 	my $value_to_histogram = log($arg);
