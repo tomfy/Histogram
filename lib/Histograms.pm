@@ -656,7 +656,7 @@ sub read_and_log{	  # take the log of value in the column
     #	print "col_spec:  $col_spec  arg:  $arg \n";
     if (defined $arg and looks_like_number($arg)) {
       if ($arg > 0) {
-	my $value_to_histogram = log($arg);
+	my $value_to_histogram = log($arg)/log(10.0);
 	#  print "n, d, n*d:  $factor1 $factor2  $value_to_histogram\n";
 	$filecol_hdata->{$histogram_id}->add_value($value_to_histogram);
 	$filecol_hdata->{'pooled'}->add_value($value_to_histogram);

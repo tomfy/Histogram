@@ -21,7 +21,7 @@ use Histograms;
 
 {                               # main
 
-  my $lo_limit = undef;
+  my $lo_limit = 0;
   my $hi_limit = undef;
   my $binwidth = undef;
   my $persist = 0;
@@ -41,7 +41,7 @@ use Histograms;
 	     'data|input=s' => \$data,
 	     #             'input_filename=s' => \$input_filename,
 	     #             'columns=s' => \$columns, # unit based, i.e. left-most column is 1
-	     'low_limit=f' => \$lo_limit,
+	     'low_limit=s' => \$lo_limit,
 	     'hi_limit=f' => \$hi_limit,
 	     'bw|binwidth|width=f' => \$binwidth,
 	     'plot!' => \$do_plot, # -noplot to suppress plot - just see histogram as text.
@@ -52,6 +52,8 @@ use Histograms;
 	     'linewidth|lw=f' => \$linewidth,
 	     'terminal=s' => \$terminal,
 	    );
+
+  $lo_limit = undef if($lo_limit eq 'auto'); # now default is 0.
 
   print "files&columns to histogram: [$data] \n";
  #my @plot_titles = ($data =~ /\"([^"]+)\"/g); # assumes all have a title in "", otherwise misdistributes them -- improve this!
