@@ -8,7 +8,8 @@ and on Graphics::GnuplotIF , available from cpan.
 histogram.pl -i 'a_data_file:4'
 
 This would generate and plot a histogram of the values in column 4 (the left-most column being column 1) of
-the file 'a_data_file'. Lower & upper bounds and the bin-width would be set automatically.
+the file 'a_data_file'. Lower & upper bounds and the bin-width would be set automatically. The columns are defined
+by splitting on whitespace.
 
 You can also specify explicity any combination of the lower bound, upper bound, and bin-width
 on the command line. E.g.:
@@ -51,7 +52,8 @@ the new parameter values.
 
 The maximum y-value of the plot can be set, e.g.:
 ymax:100<enter>
-(There are actually separate ymax values for linear and log scales; this command sets the one corresponding to the type of plot presently displayed. So if you set ymax while the scale is linear, the ymax that will be used for log scale is not affected.)
+(There are actually separate ymax values for linear and log scales; this command sets the one corresponding to the type of plot presently displayed.
+So if you set ymax while the scale is linear, the ymax that will be used for log scale is not affected.)
 
 Instead of explicitly specifying a new bin-width, you can use 'r' (refine) or 'c' (coarsen). E.g.:
 r<enter>   	  refine by one unit
