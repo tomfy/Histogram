@@ -44,7 +44,7 @@ use Histograms;
   my $enhanced = 0;
   
   GetOptions(
-	     'data_input=s' => \$data,
+	     'data_input|input=s' => \$data,
 	     #             'input_filename=s' => \$input_filename,
 	     #             'columns=s' => \$columns, # unit based, i.e. left-most column is 1
 	     'output_filename=s' => \$output_filename, # to send output to a (png) file, specify a filename
