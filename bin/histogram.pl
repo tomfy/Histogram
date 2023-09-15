@@ -37,10 +37,17 @@ use Histograms;
   my $ymax = "*";
   my $ymax_log = "*";
   my $ymin_log = 0.8;
+  my $output_filename = 'histogram'; # default is to just send to screen.
+  my $show_on_screen = 1;
+  my $write_to_png = 0;
+  my $interactive = undef;
+  my $enhanced = 0;
+  
   GetOptions(
-	     'data|input=s' => \$data,
+	     'data_input=s' => \$data,
 	     #             'input_filename=s' => \$input_filename,
 	     #             'columns=s' => \$columns, # unit based, i.e. left-most column is 1
+	     'output_filename=s' => \$output_filename, # to send output to a (png) file, specify a filename
 	     'low_limit=s' => \$lo_limit,
 	     'hi_limit=f' => \$hi_limit,
 	     'bw|binwidth|width=f' => \$binwidth,
@@ -51,9 +58,19 @@ use Histograms;
 	     'command=s' => \$gnuplot_command,
 	     'linewidth|lw=f' => \$linewidth,
 	     'terminal=s' => \$terminal,
+	     'screen!' => \$show_on_screen,
+	     'png!' => \$write_to_png,
+	     'interactive!' => \$interactive, # if true, plot and wait for further commands, else plot and exit
+	     'enhanced!' => \$enhanced,
 	    );
 
   $lo_limit = undef if($lo_limit eq 'auto'); # now default is 0.
+
+  if(!defined $interactive){
+    $interactive = 0 if($write_to_png);
+  }
+
+  $enhanced = ($enhanced)? 'enhanced' : 'noenhanced';
 
   print "files&columns to histogram: [$data] \n";
  #my @plot_titles = ($data =~ /\"([^"]+)\"/g); # assumes all have a title in "", otherwise misdistributes them -- improve this!
@@ -91,8 +108,18 @@ use Histograms;
   #  $plot->gnuplot_cmd('set tics out');
   # $plot->gnuplot_set_plot_titles(@plot_titles);
 
+  if ($write_to_png) {
+    $plot->gnuplot_hardcopy($output_filename . '.png', "png $enhanced linewidth $linewidth");
+  #  $plot->gnuplot_cmd("set terminal png $enhanced  linewidth $linewidth");
+  #  $output_filename .= '.png';
+    $plot->gnuplot_cmd("set out $output_filename");
+    plot_the_plot($histogram_obj, $plot);
+    $plot->gnuplot_restore_terminal();
+  }
+  if($show_on_screen){
   plot_the_plot($histogram_obj, $plot) if($do_plot);
-
+}
+  exit if(!$interactive);
   #####  modify plot in response to keyboard commands: #####
   while (1) {
     my $commands_string = <STDIN>; # command and optionally a parameter, e.g. 'x:0.8'
@@ -187,7 +214,7 @@ use Histograms;
 	  print STDERR "param: $param \n";
 	  $plot->gnuplot_cmd("set xlabel $param");
 	} elsif ($cmd eq 'export') {
-	  $param =~ s/'//g;
+	  $param =~ s/'//g; # the name of the file to export to; the format will be png, and '.png' will be added to filename
 
 	  $plot->gnuplot_hardcopy($param . '.png', "png linewidth $linewidth");
 	  plot_the_plot($histogram_obj, $plot);
