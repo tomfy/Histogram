@@ -8,20 +8,21 @@ and on Graphics::GnuplotIF , available from cpan.
 histogram.pl -i 'a_data_file:4'
 
 This would generate and plot a histogram of the values in column 4 (the left-most column being column 1) of
-the file 'a_data_file'. Lower & upper bounds and the bin-width would be set automatically. The columns are defined
-by splitting on whitespace.
 
-You can also specify explicity any combination of the lower bound, upper bound, and bin-width
+the file 'a_data_file'. The histogram would display a range of values from 0 up to some upper limit. This upper limit and the bin-width would be set automatically.
+
+You can also specify explicity any combination of the lower limit, upper limit, and bin-width
 on the command line. E.g.:
 
-histogram.pl -i 'a_data_file:4' -low 0 -hi 0.5 -bw 0.005
+histogram.pl -i 'a_data_file:4' -low -0.5 -hi 0.5 -bw 0.01
 
 In this case there would 100 bins covering the range from 0 to 0.5. Values < 0 would be considered
 'underflow' and values > 0.5 would be considered 'overflow'. The numbers of under- and over-flow values
 are not shown graphically but are included in the tabular representation of the histograms which is also
 output.
 
-Whichever of these parameters are not specified on the command line will be set automatically.
+If the upper limit or bin-width is not specified on the command line it will be set automatically.
+By specifying  -low auto , the lower limit can also be set automatically.
 
 Multiple histograms can be displayed on the same plot. E.g.:
 
@@ -55,10 +56,11 @@ ymax:100<enter>
 (There are actually separate ymax values for linear and log scales; this command sets the one corresponding to the type of plot presently displayed.
 So if you set ymax while the scale is linear, the ymax that will be used for log scale is not affected.)
 
-Instead of explicitly specifying a new bin-width, you can use 'r' (refine) or 'c' (coarsen). E.g.:
-r<enter>   	  refine by one unit
-r:3<enter> 	  refine by 3 units 
-c:2<enter>	  coarsen by 2 units
+Instead of explicitly specifying a new bin-width, you can use 'r' (refine) or 'c' (coarsen).
+A new bin-width from the set   ..., 0.08, 0.1, 0.125, 0.2, 0.25, 0.4, 0.5, 0.8, 1.0, 1.25, ...
+r<enter>   	  refine by one step
+r:3<enter> 	  refine by 3 steps
+c:2<enter>	  coarsen by 2 steps
 
 You can toggle between linear and logarithmic vertical scales like this:
 ll<enter>
@@ -93,7 +95,7 @@ To histogram the quotient of two columns:
 histogram.pl -i 'a_file:10/3'
 
 
-To histogram the union of the sets of values in 2 or more columns:
+To include in one histogram all of the values in 2 or more columns use 'u' (for 'union'):
 
 histogram.pl -i 'a_file:3u5u7'
 
@@ -109,7 +111,7 @@ However we can specify labels on the command line by putting the desired label t
 histogram.pl -i 'a_file:4+5"hamsters";another_file:4+5"gerbils"'
 
 
-##########   exporting   ##########
+##########   exporting a png   ##########
 You can export to a png file:
 
 export:'mass_distribution'<enter>
@@ -121,4 +123,6 @@ You can modify the plot with other gnuplot commands. For example:
 
 cmd:'set grid'<enter>
 cmd:'set key left'<enter>
+
+##################################################
 
