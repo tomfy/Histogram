@@ -62,12 +62,14 @@ use Histograms;
 	     'png!' => \$write_to_png,
 	     'interactive!' => \$interactive, # if true, plot and wait for further commands, else plot and exit
 	     'enhanced!' => \$enhanced,
+	     'ymax=f' => \$ymax,
+	     'log_ymax=f' => \$ymax_log,
 	    );
 
   $lo_limit = undef if($lo_limit eq 'auto'); # now default is 0.
 
   if(!defined $interactive){
-    $interactive = 0 if($write_to_png);
+    $interactive = ($write_to_png)? 0 : 1;
   }
 
   $enhanced = ($enhanced)? 'enhanced' : 'noenhanced';
@@ -94,7 +96,9 @@ use Histograms;
   $plot->gnuplot_cmd('set tics out');
   if ($log_y) {
     $plot->gnuplot_cmd('set log y');
-    $plot->gnuplot_set_yrange(0.8, '*');
+    $plot->gnuplot_set_yrange(0.8, (defined $ymax_log)? $ymax_log : '*');
+  }else{
+    $plot->gnuplot_set_yrange(0, (defined $ymax)? $ymax : '*');
   }
   #if($left_key) {
   my $key_pos_cmd = 'set key ' . "$key_horiz_position  $key_vert_position";
@@ -116,10 +120,12 @@ use Histograms;
     plot_the_plot($histogram_obj, $plot);
     $plot->gnuplot_restore_terminal();
   }
+  print "[$show_on_screen] [$terminal] [$do_plot]\n";
   if($show_on_screen){
+    print "XXX\n";
   plot_the_plot($histogram_obj, $plot) if($do_plot);
 }
-  exit if(!$interactive);
+  exit if(!$interactive); # if interactive wait for further commands.
   #####  modify plot in response to keyboard commands: #####
   while (1) {
     my $commands_string = <STDIN>; # command and optionally a parameter, e.g. 'x:0.8'
