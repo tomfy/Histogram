@@ -4,7 +4,7 @@ use warnings;
 use Getopt::Long;
 use Graphics::GnuplotIF qw(GnuplotIF);
 # use Math::GSL::SF  qw( :all );
-
+my $y_plot_factor = 1.08;
 
 use File::Basename 'dirname';
 use Cwd 'abs_path';
@@ -33,7 +33,7 @@ use Histograms;
   my $gnuplot_command = undef;
   my $linewidth = 1.5;
   my $terminal = 'x11';
-  my $ymin = "*";
+  my $ymin = 0;
   my $ymax = "*";
   my $ymax_log = "*";
   my $ymin_log = 0.8;
@@ -42,6 +42,7 @@ use Histograms;
   my $write_to_png = 0;
   my $interactive = undef;
   my $enhanced = 0;
+  my $vline_at_x = undef;
   
   GetOptions(
 	     'data_input|input=s' => \$data,
@@ -64,6 +65,7 @@ use Histograms;
 	     'enhanced!' => \$enhanced,
 	     'ymax=f' => \$ymax,
 	     'log_ymax=f' => \$ymax_log,
+	     'vline_at_x=f' => \$vline_at_x,
 	    );
 
   $lo_limit = undef if($lo_limit eq 'auto'); # now default is 0.
@@ -85,21 +87,31 @@ use Histograms;
 				       binwidth => $binwidth
 				      });
   $histogram_obj->bin_data();
+  print "Max bin y: ", $histogram_obj->max_bin_y(), "\n";
   my $histogram_as_string = $histogram_obj->as_string();
   print "$histogram_as_string \n";
 
- 
 
   my $plot = Graphics::GnuplotIF->new( persist => $persist, style => 'histeps');
   #, plot_titles => \@plot_titles); #, xlabel => 'lxable');
+
   $plot->gnuplot_cmd("set terminal $terminal noenhanced linewidth $linewidth");
   $plot->gnuplot_cmd('set tics out');
+
+  $ymax_log = 1.5*$histogram_obj->max_bin_y();
+   $ymax = $y_plot_factor*$histogram_obj->max_bin_y();
   if ($log_y) {
     $plot->gnuplot_cmd('set log y');
     $plot->gnuplot_set_yrange(0.8, (defined $ymax_log)? $ymax_log : '*');
-  }else{
+    set_arrow($plot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
+  } else {
+    if (defined $vline_at_x) {
+    #  $plot->gnuplot_cmd("set arrow nohead from $vline_at_x,0 to $vline_at_x,$ymax lw 0.75 dt '-'");
+      set_arrow($plot, $vline_at_x, $ymin, $ymax);
+    }
     $plot->gnuplot_set_yrange(0, (defined $ymax)? $ymax : '*');
   }
+
   #if($left_key) {
   my $key_pos_cmd = 'set key ' . "$key_horiz_position  $key_vert_position";
     $plot->gnuplot_cmd($key_pos_cmd);
@@ -159,19 +171,24 @@ use Histograms;
 	  if ($log_y) {
 	    $log_y = 0;
 	    $plot->gnuplot_cmd('unset log');
+	     set_arrow($plot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
 	    $plot->gnuplot_set_yrange($ymin, $ymax);
 	  } else {
 	    $log_y = 1;
 	    $plot->gnuplot_cmd('set log y');
+	      print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
+	    set_arrow($plot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
 	    $plot->gnuplot_set_yrange($ymin_log, $ymax_log);
 	  }
 	} elsif ($cmd eq 'ymax'){
 	  if (!$log_y) {
 	    $ymax = $param;
+	     set_arrow($plot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
 	    print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
 	    $plot->gnuplot_set_yrange($ymin, $ymax);
 	  } else {
 	    $ymax_log = $param;
+	     set_arrow($plot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
 	    $plot->gnuplot_set_yrange($ymin_log, $ymax_log);
 	  }
 	} elsif ($cmd eq 'ymin'){
@@ -202,10 +219,16 @@ use Histograms;
 	} elsif ($cmd eq 'c') { # coarsen bins
 	  $histogram_obj->change_binwidth($param);
 	  $histogram_obj->bin_data();
+	  $ymax = $histogram_obj->max_bin_y()*$y_plot_factor;
+	  set_arrow($plot, $vline_at_x, $ymax) if(defined $vline_at_x);
+	  $plot->gnuplot_set_yrange($ymin, $ymax);
 	  #   plot_the_plot($histogram_obj, $plot);
 	} elsif ($cmd eq 'r') { # refine bins
 	  $histogram_obj->change_binwidth($param? -1*$param : -1);
 	  $histogram_obj->bin_data();
+	    $ymax = $histogram_obj->max_bin_y()*$y_plot_factor;
+	  set_arrow($plot, $vline_at_x, $ymax) if(defined $vline_at_x);
+	  $plot->gnuplot_set_yrange($ymin, $ymax);
 	  #   plot_the_plot($histogram_obj, $plot);
 	} elsif ($cmd eq 'key') { # move the key (options are left, right, top, bottom)
 	  my $new_key_position = $param // 'left'; #
@@ -300,4 +323,14 @@ sub plot_the_plot{
   $plot_obj->gnuplot_plot_xy($bin_centers, @histo_bin_counts); # , $bin_counts);
 #  $plot_obj->gnuplot_plot_xy_style($bin_centers, @histo_bin_counts_w_styles);
   
+}
+
+sub set_arrow{
+  my $the_plot = shift;
+  my $x_pos = shift;
+  my $y_min = shift;
+  my $y_max = shift;
+  print "arrow top: $y_max\n";
+  $the_plot->gnuplot_cmd("unset arrow");
+  $the_plot->gnuplot_cmd("set arrow nohead from $x_pos,$y_min to $x_pos,$y_max lw 0.75 dt '-'");
 }
