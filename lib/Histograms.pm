@@ -114,6 +114,13 @@ has titles => (
 	       default => undef,
 	      );
 
+has max_bin_y => (
+		  isa => 'Num',
+		  is => 'rw',
+		  required => 0,
+		  default => 0,
+		  );
+
 #########################################################################
 
 
@@ -304,6 +311,7 @@ sub set_binwidth{ # set the binwidth and adjust the lo and hi limits to be multi
 sub bin_data{ # populate the bins using existing bin specification (binwidth, etc.)
   my $self = shift;
 
+  my $max_bin_y = -1;
   while (my ($col, $hdata) = each %{$self->filecol_hdata}) {
 
     my @bin_counts = (0) x ($self->n_bins() + 1);
@@ -323,12 +331,14 @@ sub bin_data{ # populate the bins using existing bin specification (binwidth, et
 	# $bin_centers[$bin_number] = ($bin_number+0.5)*$self->binwidth()
       }
     }
+    $max_bin_y = max(max(@bin_counts), $max_bin_y);
     my $log0count = $self->filecol_hdata()->{$col}->log0_count();
     $self->filecol_hdata()->{$col}->bin_counts( \@bin_counts );
     $self->filecol_hdata()->{$col}->bin_centers( \@bin_centers );
     $self->filecol_hdata()->{$col}->underflow_count( $underflow_count + $log0count );
     $self->filecol_hdata()->{$col}->overflow_count( $overflow_count );
   }
+  $self->max_bin_y($max_bin_y);
 }
 
 sub binned_data{
