@@ -5,6 +5,7 @@ use Getopt::Long;
 use Graphics::GnuplotIF qw(GnuplotIF);
 # use Math::GSL::SF  qw( :all );
 my $y_plot_factor = 1.08;
+my $y_plot_factor_log = 1.5;
 
 use File::Basename 'dirname';
 use Cwd 'abs_path';
@@ -20,7 +21,7 @@ use lib $libdir;
 use Histograms;
 
 {                               # main
-
+  unlink glob ".gnuplot*.stderr.log"; # to avoid accumulation of log files.
   my $lo_limit = 0;
   my $hi_limit = undef;
   my $binwidth = undef;
@@ -49,13 +50,13 @@ use Histograms;
 	     #             'input_filename=s' => \$input_filename,
 	     #             'columns=s' => \$columns, # unit based, i.e. left-most column is 1
 	     'output_filename=s' => \$output_filename, # to send output to a (png) file, specify a filename
-	     'low_limit=s' => \$lo_limit,
-	     'hi_limit=f' => \$hi_limit,
+	     'low_limit|xmin=s' => \$lo_limit,
+	     'hi_limit|xmax=f' => \$hi_limit,
 	     'bw|binwidth|width=f' => \$binwidth,
 	     'plot!' => \$do_plot, # -noplot to suppress plot - just see histogram as text.
 	     'logy!' => \$log_y,
 	     'h_key|key_horiz_position=s' => \$key_horiz_position,
-	     'v_key|key_vert_position=s' => \$key_vert_position,
+	     'v_key|key_vert_positioqn=s' => \$key_vert_position,
 	     'command=s' => \$gnuplot_command,
 	     'linewidth|lw=f' => \$linewidth,
 	     'terminal=s' => \$terminal,
@@ -99,7 +100,7 @@ use Histograms;
     $plot->gnuplot_cmd("set terminal $terminal noenhanced linewidth $linewidth");
     $plot->gnuplot_cmd('set tics out');
 
-    $ymax_log = 1.5*$histogram_obj->max_bin_y();
+    $ymax_log = $y_plot_factor_log*$histogram_obj->max_bin_y();
     $ymax = $y_plot_factor*$histogram_obj->max_bin_y();
     if ($log_y) {
       $plot->gnuplot_cmd('set log y');
@@ -172,11 +173,15 @@ use Histograms;
 	      if ($log_y) {
 		$log_y = 0;
 		$plot->gnuplot_cmd('unset log');
+		
+	
 		set_arrow($plot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
 		$plot->gnuplot_set_yrange($ymin, $ymax);
 	      } else {
 		$log_y = 1;
 		$plot->gnuplot_cmd('set log y');
+			print STDERR "ll max_bin_y: ", $histogram_obj->max_bin_y(), " y_plot_factor: $y_plot_factor \n";
+		print STDERR "ll $ymin $ymax\n";
 		print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
 		set_arrow($plot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
 		$plot->gnuplot_set_yrange($ymin_log, $ymax_log);
@@ -221,15 +226,27 @@ use Histograms;
 	      $histogram_obj->change_binwidth($param);
 	      $histogram_obj->bin_data();
 	      $ymax = $histogram_obj->max_bin_y()*$y_plot_factor;
-	      set_arrow($plot, $vline_at_x, $ymax) if(defined $vline_at_x);
-	      $plot->gnuplot_set_yrange($ymin, $ymax);
+	      $ymax_log = $histogram_obj->max_bin_y()*$y_plot_factor_log;
+	      if($log_y){
+		$plot->gnuplot_set_yrange($ymin_log, $ymax_log);
+		set_arrow($plot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
+	      }else{
+		$plot->gnuplot_set_yrange($ymin, $ymax);
+		set_arrow($plot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
+	      }
 	      #   plot_the_plot($histogram_obj, $plot);
 	    } elsif ($cmd eq 'r') { # refine bins
 	      $histogram_obj->change_binwidth($param? -1*$param : -1);
 	      $histogram_obj->bin_data();
 	      $ymax = $histogram_obj->max_bin_y()*$y_plot_factor;
-	      set_arrow($plot, $vline_at_x, $ymax) if(defined $vline_at_x);
-	      $plot->gnuplot_set_yrange($ymin, $ymax);
+	      $ymax_log = $histogram_obj->max_bin_y()*$y_plot_factor_log;
+	      if($log_y){
+		$plot->gnuplot_set_yrange($ymin_log, $ymax_log);
+		set_arrow($plot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
+	      }else{
+		$plot->gnuplot_set_yrange($ymin, $ymax);
+		set_arrow($plot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
+	      }
 	      #   plot_the_plot($histogram_obj, $plot);
 	    } elsif ($cmd eq 'key') { # move the key (options are left, right, top, bottom)
 	      my $new_key_position = $param // 'left'; #
@@ -261,6 +278,8 @@ use Histograms;
 	      print STDERR "xxxcmd: $cmd  param: $param\n";
 	      $plot->gnuplot_cmd("$param");
 	    }
+	    print STDERR "about to plot_the_plot\n";
+	    print STDERR "max_bin_y: ", $histogram_obj->max_bin_y(), " y_plot_factor: $y_plot_factor \n";
 	    plot_the_plot($histogram_obj, $plot);
 	  }
 	}
@@ -269,7 +288,7 @@ use Histograms;
     }
    # print "XXXXXXX\n";
   }
-  unlink glob ".gnuplot*.stderr.log";
+ 
   # print "About to exit histogram.pl, but first sleep, perchance to dream (for 1 second).\n";
   # sleep(1);
   # print "Ok, wake up and exit.\n";
@@ -278,7 +297,6 @@ use Histograms;
 
 
 sub plot_the_plot{
-  # <<<<<<< HEAD
   my $histogram_obj = shift;
   my $plot_obj = shift;
   #   my $persist = shift;
