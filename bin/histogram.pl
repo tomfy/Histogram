@@ -50,7 +50,7 @@ use Histograms;
 	     #             'input_filename=s' => \$input_filename,
 	     #             'columns=s' => \$columns, # unit based, i.e. left-most column is 1
 	     'output_filename=s' => \$output_filename, # to send output to a (png) file, specify a filename
-	     'low_limit|xmin=s' => \$lo_limit,
+	     'low_limit|xmin=f' => \$lo_limit,
 	     'hi_limit|xmax=f' => \$hi_limit,
 	     'bw|binwidth|width=f' => \$binwidth,
 	     'plot!' => \$do_plot, # -noplot to suppress plot - just see histogram as text.
@@ -214,11 +214,11 @@ use Histograms;
 	      $histogram_obj->set_binwidth($param);
 	      $histogram_obj->bin_data();
 	      #   plot_the_plot($histogram_obj, $plot);
-	    } elsif ($cmd eq 'lo' or $cmd eq 'low') { # change low x-scale limit
+	    } elsif ($cmd eq 'lo' or $cmd eq 'low' or $cmd eq 'xmin') { # change low x-scale limit
 	      $histogram_obj->change_range($param, undef);
 	      $histogram_obj->bin_data();
 	      #  plot_the_plot($histogram_obj, $plot);
-	    } elsif ($cmd eq 'hi') { # change high x-scale limit
+	    } elsif ($cmd eq 'hi' or $cmd eq 'xmax') { # change high x-scale limit
 	      $histogram_obj->change_range(undef, $param);
 	      $histogram_obj->bin_data();
 	      #   plot_the_plot($histogram_obj, $plot);
