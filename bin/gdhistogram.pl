@@ -107,8 +107,8 @@ sub gdplot_the_plot{
   open my $fhout, ">", "histogram.png";
   my $width = 1200;
   my $height = 900;
-  my $margin = 60; # margin width (in pixels)
-  my $space_for_axis_labels = 30;
+  my $margin = 20; # margin width (in pixels)
+  my $space_for_axis_labels = 80;
   my $frame_L_pix = $margin + $space_for_axis_labels;
   my $frame_B_pix = $height - ($margin + $space_for_axis_labels);
   my $tick_length_pix = 6;
@@ -135,7 +135,10 @@ sub gdplot_the_plot{
   my $ymax = $histogram_obj->max_bin_y()*1.08;
   my $bin_width = $histogram_obj->binwidth();
 
-  # add tick marks:
+  # add tick marks.
+  #    on x axis:
+  my $char_width = 8;
+  my $char_height = 16;
   my $tick_x = 0;
   my $tick_spacing_x = 10*$bin_width;
   for(my $i=0; 1; $i++){
@@ -144,12 +147,33 @@ sub gdplot_the_plot{
     my $xpix = pix_pos($tick_x, $xmin, $xmax, $frame_L_pix, $width-$margin);
     if($i%5 == 0){
       $image->line($xpix, $frame_B_pix, $xpix, $frame_B_pix + 2*$tick_length_pix, $black);
-      $image->string(gdLargeFont, $xpix, $frame_B_pix + 3*$tick_length_pix, $tick_x, $black);
+      $image->string(gdLargeFont, $xpix - 1.5*$char_width, $frame_B_pix + 3*$tick_length_pix, $tick_x, $black);
     }else{
       $image->line($xpix, $frame_B_pix, $xpix, $frame_B_pix + $tick_length_pix, $black);
     }
     $tick_x += $tick_spacing_x;
   }
+  #   on y axis
+  my $max_bin_count = $histogram_obj->max_bin_y();
+  my $tick_y = 0;
+  my $tick_spacing_y = tick_spacing($max_bin_count);
+ # print STDERR "$ymin $ymax $max_bin_count  $tick_y $tick_spacing_y \n";
+  for(my $i=0; 1; $i++){
+    next if($tick_y < $ymin);
+    last if($tick_y > $ymax);
+   # print STDERR "tick_y $tick_y\n";
+    my $ypix = pix_pos($tick_y, $ymin, $ymax, $frame_B_pix, $margin);
+    if($i%5 == 0){
+      $image->line($frame_L_pix, $ypix, $frame_L_pix - 2*$tick_length_pix, $ypix, $black);
+      $image->string(gdLargeFont, $frame_L_pix - 3*$tick_length_pix - 4*$char_width, $ypix-0.5*$char_height, $tick_y, $black);
+    }else{
+      $image->line($frame_L_pix, $ypix, $frame_L_pix - $tick_length_pix, $ypix, $black);
+    }
+    $tick_y += $tick_spacing_y;
+  }
+
+
+  
   
   my @ids = keys %$filecol_hdata;
   my $n_histograms = (scalar @ids) - 1; # subtract 1 to exclude the pooled histogram
@@ -236,6 +260,25 @@ sub plot_the_plot{
   #  $plot_obj->gnuplot_plot_xy_style($bin_centers, @histo_bin_counts_w_styles);
   
 }
+
+sub tick_spacing{
+  # put 20 tick marks or somewhat more
+  my $max_data = shift;
+  my @spacing_options = (1,2,4,5,10);
+  my $int_log10_max_data = int( log($max_data)/log(10) );
+  my $z = $max_data/(10**$int_log10_max_data); # should be in range 1 <= $z < 10
+#  print STDERR "$max_data  $int_log10_max_data  $z\n";
+  for my $sopt (@spacing_options){
+    if($sopt > $z){
+      my $ts = $sopt*(10**$int_log10_max_data)/20;
+    #  print STDERR "## $sopt $z ", 10**$int_log10_max_data, "  $ts\n";
+      return $ts;
+    }
+  }
+  print STDERR "### $max_data  $int_log10_max_data \n";
+}
+  
+  
 
 
 sub set_arrow{
