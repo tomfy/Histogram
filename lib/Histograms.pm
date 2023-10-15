@@ -78,6 +78,12 @@ has filecol_hdata => (
 #########################################################################
 
 ######  binning specifiers ##############################################
+has tight => (
+		   isa => 'Bool',
+		   is => 'rw',
+		   required => 0,
+		   default => 1,
+		   );
 
 has binwidth => (
                  isa => 'Maybe[Num]',
@@ -143,6 +149,22 @@ sub BUILD{
   #  if (!(defined $self->lo_limit()  and  defined $self->hi_limit()  and  defined  $self->binwidth())) 
   # if (1 or !defined $self->binwidth()) {
   if(!(defined $self->lo_limit()  and  defined $self->hi_limit()  and  defined  $self->binwidth())){
+    my ($datamin, $datamax) = $self->data_min_max();
+    print "$datamin $datamax  ", $self->tight(), "\n";
+    if($self->tight()){
+      if(!defined $self->lo_limit()){
+      if($datamin >=0){
+	$self->lo_limit(0);
+      }else{
+	$self->lo_limit($datamin - 0.05*($datamax-$datamin));
+      }
+    }
+      $self->hi_limit($datamax + 0.05*($datamax-$datamin)) if(!defined $self->hi_limit());;
+    }else{
+      if(!defined $self->lo_limit()  and  $datamin >= 0){
+	$self->lo_limit(0);
+      }
+    }
     $self->auto_bin($self->lo_limit(), $self->hi_limit(), $self->binwidth());
   }
   # }
@@ -190,6 +212,7 @@ sub load_data_from_file{
   for my $hdata (values %filecol_hdata) {
     $hdata->sort_etc();
   }
+ print "pooled data min, max: ", $filecol_hdata{'pooled'}->min(), "  ", $filecol_hdata{'pooled'}->max(), "\n";
   $self->filecol_hdata( \%filecol_hdata );
 }
 
@@ -216,8 +239,8 @@ sub auto_bin{			# automatically choose binwidth, etc.
 
   my ($lo_limit, $hi_limit) = ($mid - $X*$half_range90, $mid + $X*$half_range90);
   $lo_limit = 0 if($x_lo >= 0  and  $lo_limit < 0); # if all data >=0, x scale doesn't include negatives.
-  $self->lo_limit( $lolimit // $lo_limit );
-  $self->hi_limit( $hilimit // $hi_limit );
+  $self->lo_limit( $lolimit // $lo_limit ); # arguments to auto_bin $lolimit and $hilimit override 
+  $self->hi_limit( $hilimit // $hi_limit ); # auto calculated values
 
   if (!defined $binwidth) {
     $binwidth =  $half_range90/$n_points**0.3333;
@@ -687,6 +710,10 @@ sub read_and_log{	  # take the log of value in the column
   return 0;
 }
 
+sub data_min_max{
+  my $self = shift;
+  return ($self->filecol_hdata->{'pooled'}->min(), $self->filecol_hdata->{'pooled'}->max());
+}
 
 1;
 

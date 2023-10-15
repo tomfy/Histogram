@@ -22,7 +22,7 @@ use Histograms;
 
 {                               # main
   unlink glob ".gnuplot*.stderr.log"; # to avoid accumulation of log files.
-  my $lo_limit = 0;
+  my $lo_limit = 'auto'; # 0;
   my $hi_limit = undef;
   my $binwidth = undef;
   my $persist = 0;
@@ -44,6 +44,8 @@ use Histograms;
   my $interactive = undef;
   my $enhanced = 0;
   my $vline_at_x = undef;
+  my $tight = 1;
+  # other options for plot range: 'strict', 'loose_positive', 'loose'
   
   GetOptions(
 	     'data_input|input=s' => \$data,
@@ -67,6 +69,7 @@ use Histograms;
 	     'ymax=f' => \$ymax,
 	     'log_ymax=f' => \$ymax_log,
 	     'vline_at_x=f' => \$vline_at_x,
+	     'tight!' => \$tight,
 	    );
 
   $lo_limit = undef if($lo_limit eq 'auto'); # now default is 0.
@@ -85,14 +88,17 @@ use Histograms;
   my $histogram_obj = Histograms->new({
 				       data_fcol => $data,
 				       lo_limit => $lo_limit,
-				       hi_limit => $hi_limit, 
-				       binwidth => $binwidth
+				       hi_limit => $hi_limit,
+				       binwidth => $binwidth,
+				       tight => $tight,
 				      });
   $histogram_obj->bin_data();
   print "Max bin y: ", $histogram_obj->max_bin_y(), "\n";
   my $histogram_as_string = $histogram_obj->as_string();
   print "$histogram_as_string \n";
 
+
+  
   {				# $plot defined within this block
     my $plot = Graphics::GnuplotIF->new( persist => $persist, style => 'histeps');
     #, plot_titles => \@plot_titles); #, xlabel => 'lxable');
