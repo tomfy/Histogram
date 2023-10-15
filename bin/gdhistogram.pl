@@ -45,6 +45,7 @@ use Histograms;
   my $interactive = undef;
   my $enhanced = 0;
   my $vline_at_x = undef;
+  my $x_axis_label = undef;
   
   GetOptions(
 	     'data_input|input=s' => \$data,
@@ -68,6 +69,8 @@ use Histograms;
 	     'ymax=f' => \$ymax,
 	     'log_ymax=f' => \$ymax_log,
 	     'vline_at_x=f' => \$vline_at_x,
+	     'x_axis_label|x_label=s' => \$x_axis_label,
+
 	    );
 
   $lo_limit = undef if($lo_limit eq 'auto'); # now default is 0.
@@ -94,8 +97,7 @@ use Histograms;
   my $histogram_as_string = $histogram_obj->as_string();
   print "$histogram_as_string \n";
 
-  gdplot_the_plot($histogram_obj, $vline_at_x);
-
+  gdplot_the_plot($histogram_obj, $vline_at_x, $x_axis_label);
 
 }				# end of main
 ###########
@@ -103,6 +105,7 @@ use Histograms;
 sub gdplot_the_plot{
   my $histogram_obj = shift;
   my $vline_position = shift // undef;
+  my $x_axis_label = shift // undef;
   my $filecol_hdata = $histogram_obj->filecol_hdata();
   open my $fhout, ">", "histogram.png";
   my $width = 1200;
@@ -147,13 +150,23 @@ sub gdplot_the_plot{
     my $xpix = pix_pos($tick_x, $xmin, $xmax, $frame_L_pix, $width-$margin);
     if($i%5 == 0){
       $image->line($xpix, $frame_B_pix, $xpix, $frame_B_pix + 2*$tick_length_pix, $black);
-      $image->string(gdLargeFont, $xpix - 1.5*$char_width, $frame_B_pix + 3*$tick_length_pix, $tick_x, $black);
+      $image->string(gdLargeFont, $xpix - 0.5*(length $tick_x)*$char_width, $frame_B_pix + 3*$tick_length_pix, $tick_x, $black);
     }else{
       $image->line($xpix, $frame_B_pix, $xpix, $frame_B_pix + $tick_length_pix, $black);
     }
     $tick_x += $tick_spacing_x;
   }
-  #   on y axis
+  # add a label to the x axis:
+  if(defined $x_axis_label){
+    my $label_length = length $x_axis_label;
+    my $xpix = pix_pos(0.5*($xmin + $xmax), $xmin, $xmax, $frame_L_pix, $width-$margin);
+    $image->string(gdLargeFont,
+		   $xpix - 0.5*$label_length*$char_width,
+		   $frame_B_pix + 3*$tick_length_pix + 1.5*$char_height,
+		   $x_axis_label, $black);
+  }
+  
+  # tick marks on y axis
   my $max_bin_count = $histogram_obj->max_bin_y();
   my $tick_y = 0;
   my $tick_spacing_y = tick_spacing($max_bin_count);
@@ -165,7 +178,7 @@ sub gdplot_the_plot{
     my $ypix = pix_pos($tick_y, $ymin, $ymax, $frame_B_pix, $margin);
     if($i%5 == 0){
       $image->line($frame_L_pix, $ypix, $frame_L_pix - 2*$tick_length_pix, $ypix, $black);
-      $image->string(gdLargeFont, $frame_L_pix - 3*$tick_length_pix - 4*$char_width, $ypix-0.5*$char_height, $tick_y, $black);
+      $image->string(gdLargeFont, $frame_L_pix - 3*$tick_length_pix - (length $tick_y)*$char_width, $ypix-0.5*$char_height, $tick_y, $black);
     }else{
       $image->line($frame_L_pix, $ypix, $frame_L_pix - $tick_length_pix, $ypix, $black);
     }
@@ -173,7 +186,9 @@ sub gdplot_the_plot{
   }
 
 
-  
+
+
+  # draw the histogram
   
   my @ids = keys %$filecol_hdata;
   my $n_histograms = (scalar @ids) - 1; # subtract 1 to exclude the pooled histogram
