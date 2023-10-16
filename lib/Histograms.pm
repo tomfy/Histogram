@@ -10,6 +10,9 @@ use List::Util qw ( min max sum );
 use POSIX qw ( floor ceil );
 use Hdata;
 
+my $x_notight_factor = 2.0;
+my $x_tight_factor = 0.05;
+
 use constant  BINWIDTHS => {
 			    100 => [80, 125],
 			    125 => [100, 200],
@@ -156,10 +159,10 @@ sub BUILD{
       if($datamin >=0){
 	$self->lo_limit(0);
       }else{
-	$self->lo_limit($datamin - 0.05*($datamax-$datamin));
+	$self->lo_limit($datamin - $x_tight_factor*($datamax-$datamin));
       }
     }
-      $self->hi_limit($datamax + 0.05*($datamax-$datamin)) if(!defined $self->hi_limit());;
+      $self->hi_limit($datamax + $x_tight_factor*($datamax-$datamin)) if(!defined $self->hi_limit());;
     }else{
       if(!defined $self->lo_limit()  and  $datamin >= 0){
 	$self->lo_limit(0);
@@ -233,17 +236,17 @@ sub auto_bin{			# automatically choose binwidth, etc.
   my $i95 = -1*($i5+1);
   my ($v5, $v95) = ($pooled_hdata->data_array()->[$i5], $pooled_hdata->data_array()->[$i95]);
 
-  my $X = 2.0;
+  my $X = $x_notight_factor;
   my $mid = 0.5*($v5 + $v95);
-  my $half_range90 = 0.5*($v95-$v5);
+  my $half_range95 = 0.5*($v95-$v5);
 
-  my ($lo_limit, $hi_limit) = ($mid - $X*$half_range90, $mid + $X*$half_range90);
+  my ($lo_limit, $hi_limit) = ($mid - $X*$half_range95, $mid + $X*$half_range95);
   $lo_limit = 0 if($x_lo >= 0  and  $lo_limit < 0); # if all data >=0, x scale doesn't include negatives.
   $self->lo_limit( $lolimit // $lo_limit ); # arguments to auto_bin $lolimit and $hilimit override 
   $self->hi_limit( $hilimit // $hi_limit ); # auto calculated values
 
   if (!defined $binwidth) {
-    $binwidth =  $half_range90/$n_points**0.3333;
+    $binwidth =  $half_range95/$n_points**0.3333;
     ($binwidth, my $bwf) = xyz($binwidth);
     # round binwidth down to nearest allowed value.
     for (my $i = @bws-1; $i >= 0; $i--) {
