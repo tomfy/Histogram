@@ -2,6 +2,7 @@
 use strict;
 use warnings;
 use Getopt::Long;
+use List::Util qw (min max sum);
 
 # use Math::GSL::SF  qw( :all );
 
@@ -20,7 +21,7 @@ BEGIN {     # this has to go in Begin block so happens at compile time
 use lib $libdir;
 
 use Histograms;
-use Plot;
+use Plot_params;
 
 {				      # main
   unlink glob ".gnuplot*.stderr.log"; # to avoid accumulation of log files.
@@ -46,6 +47,7 @@ use Plot;
   my $interactive = undef;
   my $enhanced = 0;
   my $vline_at_x = undef;
+  my $plot_title = undef;
   my $x_axis_label = undef;
   my $y_axis_label = undef;
   my $tight = 1;
@@ -74,8 +76,9 @@ use Plot;
 	     'ymax=f' => \$ymax,
 	     'log_ymax=f' => \$ymax_log,
 	     'vline_at_x=f' => \$vline_at_x,
-	     'x_axis_label|x_label=s' => \$x_axis_label,
-	     'y_axis_label|y_label=s' => \$y_axis_label,
+	     'title=s' => \$plot_title,
+	     'x_axis_label|x_label|xlabel=s' => \$x_axis_label,
+	     'y_axis_label|y_label|ylabel=s' => \$y_axis_label,
 	     'tight!' => \$tight,
 	     'graphics=s' => \$graphics,
 	    );
@@ -106,181 +109,57 @@ use Plot;
 
     $ymax_log = $y_plot_factor_log*$histogram_obj->max_bin_y();
     $ymax = $y_plot_factor*$histogram_obj->max_bin_y();
-  my $the_plot = Plot->new( log_y => $log_y, ymin => $ymin, ymax => $ymax, ymin_log => $ymin_log, ymax_log => $ymax_log);
 
-  if (lc $graphics eq 'gnuplot') {	# $plot defined within this block
+
+  if (lc $graphics eq 'gnuplot') {	# Use gnuplot
     use Graphics::GnuplotIF qw(GnuplotIF);
-    my $plot = Graphics::GnuplotIF->new( persist => $persist, style => 'histeps',
-					 xlabel => "$x_axis_label", ylabel => "$y_axis_label");
+    my $plot_gnuplot = Graphics::GnuplotIF->new( persist => $persist, style => 'histeps');
+    $plot_gnuplot->gnuplot_cmd("set xlabel $x_axis_label") if(defined $x_axis_label);
+    $plot_gnuplot->gnuplot_cmd("set ylabel $y_axis_label") if(defined $y_axis_label);
+    $plot_gnuplot->gnuplot_cmd("set terminal $terminal noenhanced linewidth $linewidth");
 
-    $plot->gnuplot_cmd("set terminal $terminal noenhanced linewidth $linewidth");
+    my $plot_params = Plot_params->new( log_y => $log_y, ymin => $ymin, ymax => $ymax, ymin_log => $ymin_log, ymax_log => $ymax_log,
+			    vline_position => $vline_at_x, line_width => $linewidth);
 
-  
     if ($log_y) {
-      $plot->gnuplot_cmd('set log y');
-      $plot->gnuplot_set_yrange(0.8, (defined $ymax_log)? $ymax_log : '*');
-      set_arrow($plot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
+      $plot_gnuplot->gnuplot_cmd('set log y');
+      $plot_gnuplot->gnuplot_set_yrange(0.8, (defined $ymax_log)? $ymax_log : '*');
+      set_arrow($plot_gnuplot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
     } else {
       if (defined $vline_at_x) {
-	set_arrow($plot, $vline_at_x, $ymin, $ymax);
+	set_arrow($plot_gnuplot, $vline_at_x, $ymin, $ymax);
       }
-      $plot->gnuplot_set_yrange(0, (defined $ymax)? $ymax : '*');
+      $plot_gnuplot->gnuplot_set_yrange(0, (defined $ymax)? $ymax : '*');
     }
 
     my $key_pos_cmd = 'set key ' . "$key_horiz_position  $key_vert_position";
-    $plot->gnuplot_cmd($key_pos_cmd);
-    $plot->gnuplot_cmd('set border lw 1.25'); # apparently this width is relative to that for the histogram lines.
-    $plot->gnuplot_cmd('set mxtics');
-    $plot->gnuplot_cmd('set tics out');
- #   $plot->gnuplot_cmd('set tics front');
-    $plot->gnuplot_cmd('set tics scale 2,1');
-    $plot->gnuplot_cmd($gnuplot_command) if(defined $gnuplot_command);
- 
+    $plot_gnuplot->gnuplot_cmd($key_pos_cmd);
+    $plot_gnuplot->gnuplot_cmd('set border lw 1.25'); # apparently this width is relative to that for the histogram lines.
+    $plot_gnuplot->gnuplot_cmd('set mxtics');
+    $plot_gnuplot->gnuplot_cmd('set tics out');
+    $plot_gnuplot->gnuplot_cmd('set tics scale 2,1');
+    $plot_gnuplot->gnuplot_cmd($gnuplot_command) if(defined $gnuplot_command);
 
     if ($write_to_png) {
-      $plot->gnuplot_hardcopy($output_filename . '.png', "png $enhanced linewidth $linewidth");
-      $plot->gnuplot_cmd("set out $output_filename");
-      plot_the_plot($histogram_obj, $plot);
-      $plot->gnuplot_restore_terminal();
+      $plot_gnuplot->gnuplot_hardcopy($output_filename . '.png', "png $enhanced linewidth $linewidth");
+      $plot_gnuplot->gnuplot_cmd("set out $output_filename");
+      plot_the_plot_gnuplot($histogram_obj, $plot_gnuplot);
+      $plot_gnuplot->gnuplot_restore_terminal();
     }
     print "[$show_on_screen] [$terminal] [$do_plot]\n";
     if ($show_on_screen) {
-      plot_the_plot($histogram_obj, $plot) if($do_plot);
+      plot_the_plot_gnuplot($histogram_obj, $plot_gnuplot) if($do_plot);
     }
     if ($interactive) {
       #####  modify plot in response to keyboard commands: #####
       while (1) {		# loop to handle interactive commands.
 	my $commands_string = <STDIN>; # command and optionally a parameter, e.g. 'x:0.8'
-	if(1){
-	$commands_string =~ s/\s+$//g; # delete whitespace
-	last if($commands_string eq 'q');
-	my @cmds = split(';', $commands_string);
-	my ($cmd, $param) = (undef, undef);
-
-	for my $cmd_param (@cmds) {
-	  if ($cmd_param =~ /^([^:]+):(.+)/) {
-	    ($cmd, $param) = ($1, $2);
-	    $param =~ s/\s+//g if(! $cmd =~ /^\s*xlabel\s*$/);
-	    print STDERR "cmd: [$cmd]  param: [$param]\n";
-	  } elsif ($cmd_param =~ /^(\S+)/) {
-	    $cmd = $1;
-	  }
-	  $cmd =~ s/\s+//g;
-
-	  if (defined $cmd) {
-	    $commands_string =~ s/\s+//g if($cmd ne 'xlabel');
-	      if ($cmd eq 'g') {
-	      $plot->gnuplot_cmd('set grid');
-	    } elsif ($cmd eq 'll') {
-	      if ($log_y) {
-		$log_y = 0;
-		$plot->gnuplot_cmd('unset log');
-		set_arrow($plot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
-		$plot->gnuplot_set_yrange($ymin, $ymax);
-	      } else {
-		$log_y = 1;
-		$plot->gnuplot_cmd('set log y');
-		print STDERR "ll max_bin_y: ", $histogram_obj->max_bin_y(), " y_plot_factor: $y_plot_factor \n";
-		print STDERR "ll $ymin $ymax\n";
-		print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
-		set_arrow($plot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
-		$plot->gnuplot_set_yrange($ymin_log, $ymax_log);
-	      }
-	    } elsif ($cmd eq 'ymax') {
-	      if (!$log_y) {
-		$ymax = $param;
-		set_arrow($plot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
-		print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
-		$plot->gnuplot_set_yrange($ymin, $ymax);
-	      } else {
-		$ymax_log = $param;
-		set_arrow($plot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
-		$plot->gnuplot_set_yrange($ymin_log, $ymax_log);
-	      }
-	    } elsif ($cmd eq 'ymin') {
-	      if (!$log_y) {
-		$ymin = $param;
-		print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
-		$plot->gnuplot_set_yrange($ymin, $ymax);
-	      } else {
-		$ymin_log = $param;
-		$plot->gnuplot_set_yrange($ymin_log, $ymax_log);
-	      }
-	    } elsif ($cmd eq 'x') { # expand (or contract) x range.
-	      $histogram_obj->expand_range($param);
-	      $histogram_obj->bin_data();
-	    } elsif ($cmd eq 'bw') { # set the bin width
-	      $histogram_obj->set_binwidth($param);
-	      $histogram_obj->bin_data();
-	    } elsif ($cmd eq 'lo' or $cmd eq 'low' or $cmd eq 'xmin') { # change low x-scale limit
-	      $histogram_obj->change_range($param, undef);
-	      $histogram_obj->bin_data();
-	    } elsif ($cmd eq 'hi' or $cmd eq 'xmax') { # change high x-scale limit
-	      $histogram_obj->change_range(undef, $param);
-	      $histogram_obj->bin_data();
-	    } elsif ($cmd eq 'c') { # coarsen bins
-	      $histogram_obj->change_binwidth($param);
-	      $histogram_obj->bin_data();
-	      $ymax = $histogram_obj->max_bin_y()*$y_plot_factor;
-	      $ymax_log = $histogram_obj->max_bin_y()*$y_plot_factor_log;
-	      if ($log_y) {
-		$plot->gnuplot_set_yrange($ymin_log, $ymax_log);
-		set_arrow($plot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
-	      } else {
-		$plot->gnuplot_set_yrange($ymin, $ymax);
-		set_arrow($plot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
-	      }
-	    } elsif ($cmd eq 'r') { # refine bins
-	      $histogram_obj->change_binwidth($param? -1*$param : -1);
-	      $histogram_obj->bin_data();
-	      $ymax = $histogram_obj->max_bin_y()*$y_plot_factor;
-	      $ymax_log = $histogram_obj->max_bin_y()*$y_plot_factor_log;
-	      if ($log_y) {
-		$plot->gnuplot_set_yrange($ymin_log, $ymax_log);
-		set_arrow($plot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
-	      } else {
-		$plot->gnuplot_set_yrange($ymin, $ymax);
-		set_arrow($plot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
-	      }
-	    } elsif ($cmd eq 'key') { # move the key (options are left, right, top, bottom)
-	      my $new_key_position = $param // 'left'; #
-	      $new_key_position =~ s/,/ /; # so can use e.g. left,bottom to move both horiz. vert. at once
-	      $plot->gnuplot_cmd("set key $new_key_position");
-	    } elsif ($cmd eq 'xlabel') {
-	      $param =~ s/^\s+//;
-	      $param =~ s/\s+$//;
-	      $param =~ s/^([^'])/'$1/;
-	      $param =~ s/([^']\s*)$/$1'/;
-	      print STDERR "param: $param \n";
-	      $plot->gnuplot_cmd("set xlabel $param");
-	    } elsif ($cmd eq 'export') {
-	      $param =~ s/'//g; # the name of the file to export to; the format will be png, and '.png' will be added to filename
-
-	      $plot->gnuplot_hardcopy($param . '.png', "png linewidth $linewidth");
-	      plot_the_plot($histogram_obj, $plot);
-	      $plot->gnuplot_restore_terminal();
-	    } elsif ($cmd eq 'off') {
-	      $histogram_obj->histograms_to_plot()->[$param-1] = 0;
-	    } elsif ($cmd eq 'on') {
-	      $histogram_obj->histograms_to_plot()->[$param-1] = 1;
-	    } elsif ($cmd eq 'cmd') {
-	      if ($param =~ /^\s*['](.+)[']\s*$/) { # remove surrounding single quotes if present
-		$param = $1;
-	      }
-	      $plot->gnuplot_cmd("$param");
-	    }
-	    print STDERR "max_bin_y: ", $histogram_obj->max_bin_y(), " y_plot_factor: $y_plot_factor \n";
-	    plot_the_plot($histogram_obj, $plot);
-	  }
-	}
-      }else{
-	last if(handle_interactive_command($histogram_obj, $plot, $commands_string));
-      }
+	last if(handle_interactive_command($histogram_obj, $plot_params,  $plot_gnuplot, $commands_string));
       }
     }
-  }elsif (lc $graphics eq 'gd') {
+  }elsif (lc $graphics eq 'gd') { # Use GD
       use GD;
-      gdplot_the_plot($histogram_obj, $vline_at_x, $x_axis_label);
+      plot_the_plot_gd($histogram_obj, $vline_at_x, $plot_title, $x_axis_label, $y_axis_label);
     }
   else{
     die "Graphics option $graphics is unknown. Accepted options are 'gnuplot' and 'gd'\n";
@@ -289,11 +168,11 @@ use Plot;
 ###########
 
 
-sub plot_the_plot{
+sub plot_the_plot_gnuplot{
   my $histogram_obj = shift;
-  my $plot_obj = shift;
+  my $plot_gnuplot_obj = shift;
 
-  $plot_obj->gnuplot_set_xrange($histogram_obj->lo_limit(), $histogram_obj->hi_limit());
+  $plot_gnuplot_obj->gnuplot_set_xrange($histogram_obj->lo_limit(), $histogram_obj->hi_limit());
   my $bin_centers = $histogram_obj->filecol_hdata()->{pooled}->bin_centers();
   my @plot_titles = ();
 
@@ -309,8 +188,8 @@ sub plot_the_plot{
     }
   }
 
-  $plot_obj->gnuplot_set_plot_titles(@plot_titles);
-  $plot_obj->gnuplot_plot_xy($bin_centers, @histo_bin_counts); # , $bin_counts);
+  $plot_gnuplot_obj->gnuplot_set_plot_titles(@plot_titles);
+  $plot_gnuplot_obj->gnuplot_plot_xy($bin_centers, @histo_bin_counts);
 }
 
 sub set_arrow{
@@ -325,50 +204,62 @@ sub set_arrow{
 
 
 ### GD plotting:
-sub gdplot_the_plot{
+sub plot_the_plot_gd{
   my $histogram_obj = shift;
   my $vline_position = shift // undef;
+  my $plot_title = shift // undef;
   my $x_axis_label = shift // undef;
+  my $y_axis_label = shift // undef;
   my $filecol_hdata = $histogram_obj->filecol_hdata();
   open my $fhout, ">", "histogram.png";
 
   my $width = 1200;
   my $height = 900;
+  my $char_width = 8;
+  my $char_height = 16;
   my $image = GD::Image->new($width, $height);
   my $black = $image->colorAllocate(0, 0, 0);
   my $white = $image->colorAllocate(255, 255, 255);
+  my $blue = $image->colorAllocate(10, 10, 200);
+  my $green = $image->colorAllocate(20,130,20);
+  my $red = $image->colorAllocate(150,20,20);
+  my @histogram_colors = (
+			  #$black,
+			  $blue, $green, $red);
   $image->filledRectangle(0, 0, $width-1, $height-1, $white);
 
-  my $margin = 20;		# margin width (in pixels)
-  my $space_for_axis_labels = 80;
-  my $frame_L_pix = $margin + $space_for_axis_labels;
-  my $frame_B_pix = $height - ($margin + $space_for_axis_labels);
+  my $margin = 24;		# margin width (in pixels)
+  my $tick_length_pix = 6;
+  my $x_axis_label_space = 3*$tick_length_pix + 2.5*$char_height;
+  my $y_axis_label_space = 3*$tick_length_pix + (0.5 + length int($histogram_obj->max_bin_y()))*$char_width + ((defined $y_axis_label)? 2*$char_height : 0);
+  print "lenght max_bin_y: ", length int($histogram_obj->max_bin_y()), "\n";
+  my $frame_L_pix = $margin + $y_axis_label_space;
+  my $frame_R_pix = $width - $margin;
+  my $frame_T_pix = $margin;
+  my $frame_B_pix = $height - ($margin + $x_axis_label_space);
   my $frame_line_thickness = 3;
   $image->setThickness($frame_line_thickness);
   my $frame = GD::Polygon->new();
   $frame->addPt($frame_L_pix, $frame_B_pix);
-  $frame->addPt($frame_L_pix, $margin);
-  $frame->addPt($width-1-$margin, $margin);
-  $frame->addPt($width-1-$margin, $frame_B_pix);
+  $frame->addPt($frame_L_pix, $frame_T_pix);
+  $frame->addPt($frame_R_pix, $frame_T_pix);
+  $frame->addPt($frame_R_pix, $frame_B_pix);
   $image->openPolygon($frame, $black);
 
-  my $char_width = 8;
-  my $char_height = 16;
   my $xmin = $histogram_obj->lo_limit();
   my $xmax = $histogram_obj->hi_limit();
   my $ymin = 0;
-  my $ymax = $histogram_obj->max_bin_y()*1.08;
+  my $ymax = $histogram_obj->max_bin_y()*$y_plot_factor;
   my $bin_width = $histogram_obj->binwidth();
 
   # add tick marks.
-  my $tick_length_pix = 6;
   #    on x axis:
   my $tick_x = 0;
   my $tick_spacing_x = 10*$bin_width;
   for (my $i=0; 1; $i++) {
     next if($tick_x < $xmin);
     last if($tick_x > $xmax);
-    my $xpix = pix_pos($tick_x, $xmin, $xmax, $frame_L_pix, $width-$margin);
+    my $xpix = pix_pos($tick_x, $xmin, $xmax, $frame_L_pix, $frame_R_pix);
     if ($i%5 == 0) {
       $image->line($xpix, $frame_B_pix, $xpix, $frame_B_pix + 2*$tick_length_pix, $black);
       $image->string(gdLargeFont, $xpix - 0.5*(length $tick_x)*$char_width, $frame_B_pix + 3*$tick_length_pix, $tick_x, $black);
@@ -380,70 +271,108 @@ sub gdplot_the_plot{
   # add a label to the x axis:
   if (defined $x_axis_label) {
     my $label_length = length $x_axis_label;
-    my $xpix = pix_pos(0.5*($xmin + $xmax), $xmin, $xmax, $frame_L_pix, $width-$margin);
+    my $xpix = pix_pos(0.5*($xmin + $xmax), $xmin, $xmax, $frame_L_pix, $frame_R_pix);
     $image->string(gdLargeFont,
 		   $xpix - 0.5*$label_length*$char_width,
-		   $frame_B_pix + 3*$tick_length_pix + 1.5*$char_height,
+		   $frame_B_pix + 3*$tick_length_pix + $char_height,
 		   $x_axis_label, $black);
   }
-  
+
   # tick marks on y axis
   my $max_bin_count = $histogram_obj->max_bin_y();
   my $tick_y = 0;
   my $tick_spacing_y = tick_spacing($max_bin_count);
+  my $max_tick_chars = 0; # max number of chars in the tick_y numbers
   for (my $i=0; 1; $i++) {
     next if($tick_y < $ymin);
     last if($tick_y > $ymax);
-    my $ypix = pix_pos($tick_y, $ymin, $ymax, $frame_B_pix, $margin);
+    my $ypix = pix_pos($tick_y, $ymin, $ymax, $frame_B_pix, $frame_T_pix);
     if ($i%5 == 0) {
       $image->line($frame_L_pix, $ypix, $frame_L_pix - 2*$tick_length_pix, $ypix, $black);
       $image->string(gdLargeFont, $frame_L_pix - 3*$tick_length_pix - (length $tick_y)*$char_width, $ypix-0.5*$char_height, $tick_y, $black);
+      $max_tick_chars = max($max_tick_chars, length $tick_y);
     } else {
       $image->line($frame_L_pix, $ypix, $frame_L_pix - $tick_length_pix, $ypix, $black);
     }
     $tick_y += $tick_spacing_y;
   }
 
+  print "max tick characters: $max_tick_chars \n";
+    # add a label to the y axis:
+  if (defined $y_axis_label) {
+    my $label_length = length $y_axis_label;
+    my $ypix = pix_pos(0.5*($ymin + $ymax), $ymin, $ymax, $frame_B_pix, $frame_T_pix);
+    $image->stringUp(gdLargeFont, $frame_L_pix - (3*$tick_length_pix + ($max_tick_chars)*$char_width + 1.5*$char_height),
+		   $ypix + 0.5*$label_length*$char_width,
+		   $y_axis_label, $black);
+  }
+
   # draw the histogram
-  my $histogram_line_thickness = 2;
+  my $histogram_line_thickness = 3;
   $image->setThickness($histogram_line_thickness);
   my @ids = keys %$filecol_hdata;
-  my $n_histograms = (scalar @ids) - 1; # subtract 1 to exclude the pooled histogram
-  my $xpix = $frame_L_pix;
-  my $ypix = $frame_B_pix;
-  for (my $i = 0; $i < $n_histograms; $i++) {
-    my $id = $ids[$i];
-    my $v = $filecol_hdata->{$id};
-    print "histogram i, id: $i  $id\n";
-    my $hline = GD::Polygon->new(); # this will be the line outlining the histogram bars.
-    my $bincenters = $v->bin_centers();
-    my $counts = $v->bin_counts();
-
+  my $n_histograms = (scalar @ids); # - 1; # subtract 1 to exclude the pooled histogram
+ 
+#  for (my $i = 0; $i < $n_histograms; $i++) {
+  while (my ($hi, $plt) = each @{$histogram_obj->histograms_to_plot()} ) {
+    if ($plt == 1) {
+       print STDERR "adding histogram w index $hi.\n";
+      my $fcspec = $histogram_obj->filecol_specifiers()->[$hi];
+      my $hdata_obj = $histogram_obj->filecol_hdata()->{$fcspec};
+      my $bincounts = $hdata_obj->bin_counts();
+    # my $id = $ids[$i];
+    # my $v = $filecol_hdata->{$id};
+    # print "histogram i, id: $i  $id\n";
+    my $hline = GD::Polygon->new(); # this will be the line outlining the histogram shape.
+    my $bincenters = $hdata_obj->bin_centers();
+ #   my $counts = $v->bin_counts();
+    my $xpix = $frame_L_pix;
+    my $ypix = $frame_B_pix;
     $hline->addPt($xpix, $ypix);
     while (my($i, $bcx) = each @$bincenters) {
       next if($bcx < $xmin  or  $bcx > $xmax); # exclude underflow, overflow
-      my $bincount = $counts->[$i];
-      $ypix = pix_pos($bincount, $ymin, $ymax, $frame_B_pix, $margin);
-      $xpix = pix_pos($bcx-0.5*$bin_width, $xmin, $xmax, $frame_L_pix, $width-$margin);
+      my $bincount = $bincounts->[$i];
+      $ypix = pix_pos($bincount, $ymin, $ymax, $frame_B_pix, $frame_T_pix);
+      $xpix = pix_pos($bcx-0.5*$bin_width, $xmin, $xmax, $frame_L_pix, $frame_R_pix);
       $hline->addPt($xpix, $ypix);
-      $xpix = pix_pos($bcx+0.5*$bin_width, $xmin, $xmax, $frame_L_pix, $width-$margin);
+      $xpix = pix_pos($bcx+0.5*$bin_width, $xmin, $xmax, $frame_L_pix, $frame_R_pix);
       $hline->addPt($xpix, $ypix);
     }				# end loop over histogram bins.
-    $xpix = $width-$margin;
+    $xpix = $frame_R_pix;
     $ypix = $frame_B_pix;
     $hline->addPt($xpix, $ypix);
-    $image->unclosedPolygon($hline, $black);
+    my $color = $histogram_colors[$hi % 3];
+       $image->unclosedPolygon($hline, $color);
+      # my $label = $hdata_obj->label();
+       if(defined $hdata_obj->label()  and  length $hdata_obj->label() > 0){
+       my $label_x_pix = 0.9*$frame_L_pix + 0.1*$frame_R_pix;
+       my $label_y_pix = 0.9*$frame_T_pix + 0.1*$frame_B_pix + $hi*$char_height;
+       $image->line($label_x_pix - 25, $label_y_pix + 0.5*$char_height, $label_x_pix - 5, $label_y_pix + 0.5*$char_height, $color);
+       $image->string(gdLargeFont, $label_x_pix, $label_y_pix, $hdata_obj->label(), $black);
+     }
+  }
   } # end loop over histograms
   if (defined $vline_position) {
+    $image->setThickness(2);
     $image->setStyle(
-		     $black, $black, $black, $black, $black, $black, $black, $black, $black, $black, $black, $black, 
+		     $black, $black, $black, $black, $black, $black, $black, $black, $black, $black, $black, $black,
+		     $black, $black, $black, $black, $black, $black, $black, $black, $black, $black, $black, $black,
+		     gdTransparent, gdTransparent, gdTransparent, gdTransparent, gdTransparent, gdTransparent,
 		     gdTransparent, gdTransparent, gdTransparent, gdTransparent, gdTransparent, gdTransparent,
 		     gdTransparent, gdTransparent, gdTransparent, gdTransparent);
-    $xpix = pix_pos($vline_position, $xmin, $xmax, $frame_L_pix, $width-$margin);
-    $image->line($xpix, $frame_B_pix, $xpix, $margin, gdStyled);
+    my $xpix = pix_pos($vline_position, $xmin, $xmax, $frame_L_pix, $frame_R_pix);
+    $image->line($xpix, $frame_B_pix, $xpix, $frame_T_pix, gdStyled);
   }
+  my $label = 'plot title';
+  if(defined $plot_title){
+  my $title_x_pix = 0.5*$frame_L_pix + 0.5*$frame_R_pix - (length $label)*$char_width;
+  my $title_y_pix = 0.97*$frame_T_pix + 0.03*$frame_B_pix;
+  $image->string(gdLargeFont, $title_x_pix, $title_y_pix, $plot_title, $black);
+}
+  
   binmode $fhout;
   print $fhout $image->png;
+  close $fhout;
 }
 
 sub pix_pos{
@@ -471,135 +400,279 @@ sub tick_spacing{
 }
 
 
-# sub handle_interactive_command{
-#   my $histogram_obj = shift;
-#   my $plot = shift;
-#   my $commands_string = shift;
-#   my $ymin = shift;
-#   my $ymax = shift;
-#   my $ymin_log = shift;
-#   my $y
+sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4 or xmax:0.2;ymax:2000q
+  my $histogram_obj = shift;
+  my $the_plot_params = shift; # instance of Plot_params
+  my $the_gnuplot = shift; # $plot_gnuplot instance of Graphics::GnuplotIF
+  my $commands_string = shift;
+#  my $plot = $the_plot_params->plot_obj();
+  my $log_y = $the_plot_params->log_y();
+  my $ymin = $the_plot_params->ymin();
+  my $ymax = $the_plot_params->ymax();
+  my $ymin_log = $the_plot_params->ymin_log();
+  my $ymax_log = $the_plot_params->ymax_log();
+  my $vline_at_x = $the_plot_params->vline_position(); # 
+  my $linewidth = $the_plot_params->line_width();
 
-#   $commands_string =~ s/\s+$//g; # delete whitespace
-#   return 1 if($commands_string eq 'q');
-#   my @cmds = split(';', $commands_string);
-#   my ($cmd, $param) = (undef, undef);
+  $commands_string =~ s/\s+$//g; # delete whitespace
+  return 1 if($commands_string eq 'q');
+  my @cmds = split(';', $commands_string);
+  my ($cmd, $param) = (undef, undef);
 
-#   for my $cmd_param (@cmds) {
-#     if ($cmd_param =~ /^([^:]+):(.+)/) {
-#       ($cmd, $param) = ($1, $2);
-#       $param =~ s/\s+//g if(! $cmd =~ /^\s*xlabel\s*$/);
-#       print STDERR "cmd: [$cmd]  param: [$param]\n";
-#     } elsif ($cmd_param =~ /^(\S+)/) {
-#       $cmd = $1;
-#     }
-#     $cmd =~ s/\s+//g;
+  for my $cmd_param (@cmds) {
+    if ($cmd_param =~ /^([^:]+):(.+)/) {
+      ($cmd, $param) = ($1, $2);
+      $param =~ s/\s+//g if(! $cmd =~ /^\s*xlabel\s*$/);
+      print STDERR "cmd: [$cmd]  param: [$param]\n";
+    } elsif ($cmd_param =~ /^(\S+)/) {
+      $cmd = $1;
+    }
+    $cmd =~ s/\s+//g;
 
-#     if (defined $cmd) {
-#       $commands_string =~ s/\s+//g if($cmd ne 'xlabel');
-#       if ($cmd eq 'g') {
-# 	$plot->gnuplot_cmd('set grid');
-#       } elsif ($cmd eq 'll') {
-# 	if ($log_y) {
-# 	  $log_y = 0;
-# 	  $plot->gnuplot_cmd('unset log');
-# 	  set_arrow($plot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
-# 	  $plot->gnuplot_set_yrange($ymin, $ymax);
-# 	} else {
-# 	  $log_y = 1;
-# 	  $plot->gnuplot_cmd('set log y');
-# 	  print STDERR "ll max_bin_y: ", $histogram_obj->max_bin_y(), " y_plot_factor: $y_plot_factor \n";
-# 	  print STDERR "ll $ymin $ymax\n";
-# 	  print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
-# 	  set_arrow($plot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
-# 	  $plot->gnuplot_set_yrange($ymin_log, $ymax_log);
-# 	}
-#       } elsif ($cmd eq 'ymax') {
-# 	if (!$log_y) {
-# 	  $ymax = $param;
-# 	  set_arrow($plot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
-# 	  print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
-# 	  $plot->gnuplot_set_yrange($ymin, $ymax);
-# 	} else {
-# 	  $ymax_log = $param;
-# 	  set_arrow($plot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
-# 	  $plot->gnuplot_set_yrange($ymin_log, $ymax_log);
-# 	}
-#       } elsif ($cmd eq 'ymin') {
-# 	if (!$log_y) {
-# 	  $ymin = $param;
-# 	  print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
-# 	  $plot->gnuplot_set_yrange($ymin, $ymax);
-# 	} else {
-# 	  $ymin_log = $param;
-# 	  $plot->gnuplot_set_yrange($ymin_log, $ymax_log);
-# 	}
-#       } elsif ($cmd eq 'x') {	# expand (or contract) x range.
-# 	$histogram_obj->expand_range($param);
-# 	$histogram_obj->bin_data();
-#       } elsif ($cmd eq 'bw') {	# set the bin width
-# 	$histogram_obj->set_binwidth($param);
-# 	$histogram_obj->bin_data();
-#       } elsif ($cmd eq 'lo' or $cmd eq 'low' or $cmd eq 'xmin') { # change low x-scale limit
-# 	$histogram_obj->change_range($param, undef);
-# 	$histogram_obj->bin_data();
-#       } elsif ($cmd eq 'hi' or $cmd eq 'xmax') { # change high x-scale limit
-# 	$histogram_obj->change_range(undef, $param);
-# 	$histogram_obj->bin_data();
-#       } elsif ($cmd eq 'c') {	# coarsen bins
-# 	$histogram_obj->change_binwidth($param);
-# 	$histogram_obj->bin_data();
-# 	$ymax = $histogram_obj->max_bin_y()*$y_plot_factor;
-# 	$ymax_log = $histogram_obj->max_bin_y()*$y_plot_factor_log;
-# 	if ($log_y) {
-# 	  $plot->gnuplot_set_yrange($ymin_log, $ymax_log);
-# 	  set_arrow($plot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
-# 	} else {
-# 	  $plot->gnuplot_set_yrange($ymin, $ymax);
-# 	  set_arrow($plot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
-# 	}
-#       } elsif ($cmd eq 'r') {	# refine bins
-# 	$histogram_obj->change_binwidth($param? -1*$param : -1);
-# 	$histogram_obj->bin_data();
-# 	$ymax = $histogram_obj->max_bin_y()*$y_plot_factor;
-# 	$ymax_log = $histogram_obj->max_bin_y()*$y_plot_factor_log;
-# 	if ($log_y) {
-# 	  $plot->gnuplot_set_yrange($ymin_log, $ymax_log);
-# 	  set_arrow($plot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
-# 	} else {
-# 	  $plot->gnuplot_set_yrange($ymin, $ymax);
-# 	  set_arrow($plot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
-# 	}
-#       } elsif ($cmd eq 'key') { # move the key (options are left, right, top, bottom)
-# 	my $new_key_position = $param // 'left'; #
-# 	$new_key_position =~ s/,/ /; # so can use e.g. left,bottom to move both horiz. vert. at once
-# 	$plot->gnuplot_cmd("set key $new_key_position");
-#       } elsif ($cmd eq 'xlabel') {
-# 	$param =~ s/^\s+//;
-# 	$param =~ s/\s+$//;
-# 	$param =~ s/^([^'])/'$1/;
-# 	$param =~ s/([^']\s*)$/$1'/;
-# 	print STDERR "param: $param \n";
-# 	$plot->gnuplot_cmd("set xlabel $param");
-#       } elsif ($cmd eq 'export') {
-# 	$param =~ s/'//g; # the name of the file to export to; the format will be png, and '.png' will be added to filename
+    if (defined $cmd) {
+      $commands_string =~ s/\s+//g if($cmd ne 'xlabel');
+      if ($cmd eq 'g') {
+	$the_gnuplot->gnuplot_cmd('set grid');
+      } elsif ($cmd eq 'll') {
+	if ($log_y) {
+	  $the_plot_params->log_y(0);
+	  $the_gnuplot->gnuplot_cmd('unset log');
+	  set_arrow($the_gnuplot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
+	  $the_gnuplot->gnuplot_set_yrange($ymin, $ymax);
+	} else {
+	  $the_plot_params->log_y(1);
+	  $the_gnuplot->gnuplot_cmd('set log y');
+	  print STDERR "ll max_bin_y: ", $histogram_obj->max_bin_y(), " y_plot_factor: $y_plot_factor \n";
+	  print STDERR "ll $ymin $ymax\n";
+	  print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
+	  set_arrow($the_gnuplot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
+	  $the_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
+	}
+      } elsif ($cmd eq 'ymax') {
+	if (!$log_y) {
+	  $ymax = $param;
+	  set_arrow($the_gnuplot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
+	  print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
+	  $the_gnuplot->gnuplot_set_yrange($ymin, $ymax);
+	 # $the_plot_params->ymax($ymax);
+	} else {
+	  $ymax_log = $param;
+	  set_arrow($the_gnuplot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
+	  $the_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
+	 # $the_plot_params->ymax_log($ymax_log);
+	}
+      } elsif ($cmd eq 'ymin') {
+	if (!$log_y) {
+	  $ymin = $param;
+	  print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
+	  $the_gnuplot->gnuplot_set_yrange($ymin, $ymax);
+	 # $the_plot_params->ymin($ymin);
+	} else {
+	  $ymin_log = $param;
+	  $the_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
+	 # $the_plot_params->ymin_log($ymin_log);
+	}
+      } elsif ($cmd eq 'x') {	# expand (or contract) x range.
+	$histogram_obj->expand_range($param);
+	$histogram_obj->bin_data();
+      } elsif ($cmd eq 'bw') {	# set the bin width
+	$histogram_obj->set_binwidth($param);
+	$histogram_obj->bin_data();
+      } elsif ($cmd eq 'lo' or $cmd eq 'low' or $cmd eq 'xmin') { # change low x-scale limit
+	$histogram_obj->change_range($param, undef);
+	$histogram_obj->bin_data();
+      } elsif ($cmd eq 'hi' or $cmd eq 'xmax') { # change high x-scale limit
+	$histogram_obj->change_range(undef, $param);
+	$histogram_obj->bin_data();
+      } elsif ($cmd eq 'c') {	# coarsen bins
+	$histogram_obj->change_binwidth($param);
+	$histogram_obj->bin_data();
+	$ymax = $histogram_obj->max_bin_y()*$y_plot_factor;
+	# $the_plot_params->ymax($ymax);
+	$ymax_log = $histogram_obj->max_bin_y()*$y_plot_factor_log;
+	# $the_plot_params->ymax_log($ymax_log);
+	if ($log_y) {
+	  $the_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
+	  set_arrow($the_gnuplot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
+	} else {
+	  $the_gnuplot->gnuplot_set_yrange($ymin, $ymax);
+	  set_arrow($the_gnuplot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
+	}
+      } elsif ($cmd eq 'r') {	# refine bins
+	$histogram_obj->change_binwidth($param? -1*$param : -1);
+	$histogram_obj->bin_data();
+	$ymax = $histogram_obj->max_bin_y()*$y_plot_factor;
+	# $the_plot_params->ymax($ymax);
+	$ymax_log = $histogram_obj->max_bin_y()*$y_plot_factor_log;
+	# $the_plot_params->ymax_log($ymax_log);
+	if ($log_y) {
+	  $the_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
+	  set_arrow($the_gnuplot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
+	} else {
+	  $the_gnuplot->gnuplot_set_yrange($ymin, $ymax);
+	  set_arrow($the_gnuplot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
+	}
+      } elsif ($cmd eq 'key') { # move the key (options are left, right, top, bottom)
+	my $new_key_position = $param // 'left'; #
+	$new_key_position =~ s/,/ /; # so can use e.g. left,bottom to move both horiz. vert. at once
+	$the_gnuplot->gnuplot_cmd("set key $new_key_position");
+      } elsif ($cmd eq 'xlabel') {
+	$param =~ s/^\s+//;
+	$param =~ s/\s+$//;
+	$param =~ s/^([^'])/'$1/;
+	$param =~ s/([^']\s*)$/$1'/;
+	print STDERR "param: $param \n";
+	$the_gnuplot->gnuplot_cmd("set xlabel $param");
+      } elsif ($cmd eq 'export') {
+	$param =~ s/'//g; # the name of the file to export to; the format will be png, and '.png' will be added to filename
 
-# 	$plot->gnuplot_hardcopy($param . '.png', "png linewidth $linewidth");
-# 	plot_the_plot($histogram_obj, $plot);
-# 	$plot->gnuplot_restore_terminal();
-#       } elsif ($cmd eq 'off') {
-# 	$histogram_obj->histograms_to_plot()->[$param-1] = 0;
-#       } elsif ($cmd eq 'on') {
-# 	$histogram_obj->histograms_to_plot()->[$param-1] = 1;
-#       } elsif ($cmd eq 'cmd') {
-# 	if ($param =~ /^\s*['](.+)[']\s*$/) { # remove surrounding single quotes if present
-# 	  $param = $1;
-# 	}
-# 	$plot->gnuplot_cmd("$param");
-#       }
-#       print STDERR "max_bin_y: ", $histogram_obj->max_bin_y(), " y_plot_factor: $y_plot_factor \n";
-#       plot_the_plot($histogram_obj, $plot);
-#     }
-#   }
-#   return 0;
-# }
+	$the_gnuplot->gnuplot_hardcopy($param . '.png', "png linewidth $linewidth");
+	plot_the_plot_gnuplot($histogram_obj, $the_gnuplot);
+	$the_gnuplot->gnuplot_restore_terminal();
+      } elsif ($cmd eq 'off') {
+	$histogram_obj->histograms_to_plot()->[$param-1] = 0;
+      } elsif ($cmd eq 'on') {
+	$histogram_obj->histograms_to_plot()->[$param-1] = 1;
+      } elsif ($cmd eq 'cmd') {
+	if ($param =~ /^\s*['](.+)[']\s*$/) { # remove surrounding single quotes if present
+	  $param = $1;
+	}
+	$the_gnuplot->gnuplot_cmd("$param");
+      }
+      print STDERR "max_bin_y: ", $histogram_obj->max_bin_y(), " y_plot_factor: $y_plot_factor \n";
+      plot_the_plot_gnuplot($histogram_obj, $the_gnuplot);
+
+      $the_plot_params->ymin($ymin);
+      $the_plot_params->ymin_log($ymin_log);
+      $the_plot_params->ymax($ymax);
+      $the_plot_params->ymax_log($ymax_log);
+      
+    }
+  }
+  return 0;
+}
+
+
+      # 	if(0){
+      # 	$commands_string =~ s/\s+$//g; # delete whitespace
+      # 	last if($commands_string eq 'q');
+      # 	my @cmds = split(';', $commands_string);
+      # 	my ($cmd, $param) = (undef, undef);
+
+      # 	for my $cmd_param (@cmds) {
+      # 	  if ($cmd_param =~ /^([^:]+):(.+)/) {
+      # 	    ($cmd, $param) = ($1, $2);
+      # 	    $param =~ s/\s+//g if(! $cmd =~ /^\s*xlabel\s*$/);
+      # 	    print STDERR "cmd: [$cmd]  param: [$param]\n";
+      # 	  } elsif ($cmd_param =~ /^(\S+)/) {
+      # 	    $cmd = $1;
+      # 	  }
+      # 	  $cmd =~ s/\s+//g;
+
+      # 	  if (defined $cmd) {
+      # 	    $commands_string =~ s/\s+//g if($cmd ne 'xlabel');
+      # 	      if ($cmd eq 'g') {
+      # 	      $plot_gnuplot->gnuplot_cmd('set grid');
+      # 	    } elsif ($cmd eq 'll') {
+      # 	      if ($log_y) {
+      # 		$log_y = 0;
+      # 		$plot_gnuplot->gnuplot_cmd('unset log');
+      # 		set_arrow($plot_gnuplot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
+      # 		$plot_gnuplot->gnuplot_set_yrange($ymin, $ymax);
+      # 	      } else {
+      # 		$log_y = 1;
+      # 		$plot_gnuplot->gnuplot_cmd('set log y');
+      # 		print STDERR "ll max_bin_y: ", $histogram_obj->max_bin_y(), " y_plot_factor: $y_plot_factor \n";
+      # 		print STDERR "ll $ymin $ymax\n";
+      # 		print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
+      # 		set_arrow($plot_gnuplot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
+      # 		$plot_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
+      # 	      }
+      # 	    } elsif ($cmd eq 'ymax') {
+      # 	      if (!$log_y) {
+      # 		$ymax = $param;
+      # 		set_arrow($plot_gnuplot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
+      # 		print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
+      # 		$plot_gnuplot->gnuplot_set_yrange($ymin, $ymax);
+      # 	      } else {
+      # 		$ymax_log = $param;
+      # 		set_arrow($plot_gnuplot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
+      # 		$plot_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
+      # 	      }
+      # 	    } elsif ($cmd eq 'ymin') {
+      # 	      if (!$log_y) {
+      # 		$ymin = $param;
+      # 		print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
+      # 		$plot_gnuplot->gnuplot_set_yrange($ymin, $ymax);
+      # 	      } else {
+      # 		$ymin_log = $param;
+      # 		$plot_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
+      # 	      }
+      # 	    } elsif ($cmd eq 'x') { # expand (or contract) x range.
+      # 	      $histogram_obj->expand_range($param);
+      # 	      $histogram_obj->bin_data();
+      # 	    } elsif ($cmd eq 'bw') { # set the bin width
+      # 	      $histogram_obj->set_binwidth($param);
+      # 	      $histogram_obj->bin_data();
+      # 	    } elsif ($cmd eq 'lo' or $cmd eq 'low' or $cmd eq 'xmin') { # change low x-scale limit
+      # 	      $histogram_obj->change_range($param, undef);
+      # 	      $histogram_obj->bin_data();
+      # 	    } elsif ($cmd eq 'hi' or $cmd eq 'xmax') { # change high x-scale limit
+      # 	      $histogram_obj->change_range(undef, $param);
+      # 	      $histogram_obj->bin_data();
+      # 	    } elsif ($cmd eq 'c') { # coarsen bins
+      # 	      $histogram_obj->change_binwidth($param);
+      # 	      $histogram_obj->bin_data();
+      # 	      $ymax = $histogram_obj->max_bin_y()*$y_plot_factor;
+      # 	      $ymax_log = $histogram_obj->max_bin_y()*$y_plot_factor_log;
+      # 	      if ($log_y) {
+      # 		$plot_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
+      # 		set_arrow($plot_gnuplot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
+      # 	      } else {
+      # 		$plot_gnuplot->gnuplot_set_yrange($ymin, $ymax);
+      # 		set_arrow($plot_gnuplot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
+      # 	      }
+      # 	    } elsif ($cmd eq 'r') { # refine bins
+      # 	      $histogram_obj->change_binwidth($param? -1*$param : -1);
+      # 	      $histogram_obj->bin_data();
+      # 	      $ymax = $histogram_obj->max_bin_y()*$y_plot_factor;
+      # 	      $ymax_log = $histogram_obj->max_bin_y()*$y_plot_factor_log;
+      # 	      if ($log_y) {
+      # 		$plot_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
+      # 		set_arrow($plot_gnuplot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
+      # 	      } else {
+      # 		$plot_gnuplot->gnuplot_set_yrange($ymin, $ymax);
+      # 		set_arrow($plot_gnuplot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
+      # 	      }
+      # 	    } elsif ($cmd eq 'key') { # move the key (options are left, right, top, bottom)
+      # 	      my $new_key_position = $param // 'left'; #
+      # 	      $new_key_position =~ s/,/ /; # so can use e.g. left,bottom to move both horiz. vert. at once
+      # 	      $plot_gnuplot->gnuplot_cmd("set key $new_key_position");
+      # 	    } elsif ($cmd eq 'xlabel') {
+      # 	      $param =~ s/^\s+//;
+      # 	      $param =~ s/\s+$//;
+      # 	      $param =~ s/^([^'])/'$1/;
+      # 	      $param =~ s/([^']\s*)$/$1'/;
+      # 	      print STDERR "param: $param \n";
+      # 	      $plot_gnuplot->gnuplot_cmd("set xlabel $param");
+      # 	    } elsif ($cmd eq 'export') {
+      # 	      $param =~ s/'//g; # the name of the file to export to; the format will be png, and '.png' will be added to filename
+
+      # 	      $plot_gnuplot->gnuplot_hardcopy($param . '.png', "png linewidth $linewidth");
+      # 	      plot_the_plot_gnuplot($histogram_obj, $plot_gnuplot);
+      # 	      $plot_gnuplot->gnuplot_restore_terminal();
+      # 	    } elsif ($cmd eq 'off') {
+      # 	      $histogram_obj->histograms_to_plot()->[$param-1] = 0;
+      # 	    } elsif ($cmd eq 'on') {
+      # 	      $histogram_obj->histograms_to_plot()->[$param-1] = 1;
+      # 	    } elsif ($cmd eq 'cmd') {
+      # 	      if ($param =~ /^\s*['](.+)[']\s*$/) { # remove surrounding single quotes if present
+      # 		$param = $1;
+      # 	      }
+      # 	      $plot_gnuplot->gnuplot_cmd("$param");
+      # 	    }
+      # 	    print STDERR "max_bin_y: ", $histogram_obj->max_bin_y(), " y_plot_factor: $y_plot_factor \n";
+      # 	    plot_the_plot_gnuplot($histogram_obj, $plot_gnuplot);
+      # 	  }
+      # 	}
+      # }else{
