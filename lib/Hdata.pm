@@ -53,11 +53,11 @@ has max => (
              default => undef,
             );
 
-has range => (                  # min and max numbers in
-              isa => 'ArrayRef[Maybe[Num]]',
-              is => 'rw',
-              default => sub { [undef, undef] },
-             );
+# has range => (                  # min and max numbers in
+#               isa => 'ArrayRef[Maybe[Num]]',
+#               is => 'rw',
+#               default => sub { [undef, undef] },
+#              );
 
 has sum => (
              isa => 'Maybe[Num]',
