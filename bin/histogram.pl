@@ -46,7 +46,7 @@ use Plot_params;
   my $write_to_png = 0;
   my $interactive = undef;
   my $enhanced = 0;
-  my $vline_at_x = undef;
+  my $vline_position = undef;
   my $plot_title = undef;
   my $x_axis_label = undef;
   my $y_axis_label = undef;
@@ -78,7 +78,7 @@ use Plot_params;
 	     'enhanced!' => \$enhanced,
 	     'ymax=f' => \$ymax,
 	     'log_ymax=f' => \$ymax_log,
-	     'vline_at_x=f' => \$vline_at_x,
+	     'vline_position=f' => \$vline_position,
 	     'title=s' => \$plot_title,
 	     'x_axis_label|x_label|xlabel=s' => \$x_axis_label,
 	     'y_axis_label|y_label|ylabel=s' => \$y_axis_label,
@@ -88,6 +88,14 @@ use Plot_params;
 	     'height=f' => \$plot_height,
 	     'color=s' => \$histogram_color,
 	    );
+
+   print "vline position: ", $vline_position // "undef", "\n";
+  print "color: ", $histogram_color // "undef", "\n";
+  print "title: ", $plot_title // "undef", "\n";
+  print "x_axis_label: ", $x_axis_label // "undef", "\n";
+  print "y_axis_label: ", $y_axis_label // "undef", "\n";
+  print "binwidth: ", $binwidth // "undef", "\n";
+  # sleep(5);
 
   $lo_limit = undef if($lo_limit eq 'auto'); # now default is 0.
 
@@ -126,15 +134,15 @@ use Plot_params;
     $plot_gnuplot->gnuplot_set_ylabel($y_axis_label) if(defined $y_axis_label);
 
     my $plot_params = Plot_params->new( log_y => $log_y, ymin => $ymin, ymax => $ymax, ymin_log => $ymin_log, ymax_log => $ymax_log,
-			    vline_position => $vline_at_x, line_width => $linewidth);
+			    vline_position => $vline_position, line_width => $linewidth);
 
     if ($log_y) {
       $plot_gnuplot->gnuplot_cmd('set log y');
       $plot_gnuplot->gnuplot_set_yrange(0.8, (defined $ymax_log)? $ymax_log : '*');
-      set_arrow($plot_gnuplot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
+      set_arrow($plot_gnuplot, $vline_position, $ymin_log, $ymax_log) if(defined $vline_position);
     } else {
-      if (defined $vline_at_x) {
-	set_arrow($plot_gnuplot, $vline_at_x, $ymin, $ymax);
+      if (defined $vline_position) {
+	set_arrow($plot_gnuplot, $vline_position, $ymin, $ymax);
       }
       $plot_gnuplot->gnuplot_set_yrange(0, (defined $ymax)? $ymax : '*');
     }
@@ -166,7 +174,20 @@ use Plot_params;
     }
   }elsif (lc $graphics eq 'gd') { # Use GD
       use GD;
-      plot_the_plot_gd($histogram_obj, $vline_at_x, $histogram_color, $plot_title, $x_axis_label, $y_axis_label);
+      plot_the_plot_gd($histogram_obj,
+		       {vline_position => $vline_position,
+			histogram_color => $histogram_color,
+			plot_title => $plot_title,
+			x_axis_label => $x_axis_label,
+			y_axis_label => $y_axis_label}
+		      );
+  # my $vline_position = $parameters->{vline_position} // undef;
+  # my $histogram_color = $parameters->{histogram_color} // undef; # default is black (then blue, green, red, ... if multiple histograms)
+  # my $plot_title = $parameters->{plot_title} // undef;
+  # my $x_axis_label = $parameters->{x_axis_label} // undef;
+  # my $y_axis_label = $parameters->{y_axis_label} // undef;
+
+      
     }
   else{
     die "Graphics option $graphics is unknown. Accepted options are 'gnuplot' and 'gd'\n";
@@ -213,23 +234,32 @@ sub set_arrow{
 ### GD plotting:
 sub plot_the_plot_gd{
   my $histogram_obj = shift;
-  my $vline_position = shift // undef;
-  my $histogram_color = shift // undef; # default is black (then blue, green, red, ... if multiple histograms)
-  my $plot_title = shift // undef;
-  my $x_axis_label = shift // undef;
-  my $y_axis_label = shift // undef;
+  my $parameters = shift; #
+  my $vline_position = $parameters->{vline_position} // undef;
+  my $histogram_color = $parameters->{histogram_color} // undef; # default is black (then blue, green, red, ... if multiple histograms)
+  my $plot_title = $parameters->{plot_title} // undef;
+  my $x_axis_label = $parameters->{x_axis_label} // undef;
+  my $y_axis_label = $parameters->{y_axis_label} // undef;
   my $filecol_hdata = $histogram_obj->filecol_hdata();
   open my $fhout, ">", "histogram.png";
 
-  print "$vline_position  $histogram_color  $plot_title  $x_axis_label  $y_axis_label \n";
+  # print "vline position: ", $vline_position // "undef", "\n";
+  # print "color: ", $histogram_color // "undef", "\n";
+  # print "title: ", $plot_title // "undef", "\n";
+  # print "x_axis_label: ", $x_axis_label // "undef", "\n";
+  # print "y_axis_label: ", $y_axis_label // "undef", "\n";
+  # sleep(5);
   
   my $width = 800;
   my $height = 600;
   my $char_width = 8; # these are the dimensions of GD's
   my $char_height = 16; # gdLargeFont characters, according to documentation.
   my $image = GD::Image->new($width, $height);
-  my %colors = (black => $image->colorAllocate(0, 0, 0), white => $image->colorAllocate(255, 255, 255),
-	       blue => $image->colorAllocate(80, 80, 225), green => $image->colorAllocate(20,130,20), red => $image->colorAllocate(150,20,20));
+  my %colors = (black => $image->colorAllocate(0, 0, 0),
+		white => $image->colorAllocate(255, 255, 255),
+		blue => $image->colorAllocate(80, 80, 225),
+		green => $image->colorAllocate(20,130,20),
+		red => $image->colorAllocate(150,20,20));
   my $black = $colors{black};
   my @histogram_colors = ('black', 'blue', 'green', 'red');
   $image->filledRectangle(0, 0, $width-1, $height-1, $colors{white});
@@ -420,7 +450,7 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
   my $ymax = $the_plot_params->ymax();
   my $ymin_log = $the_plot_params->ymin_log();
   my $ymax_log = $the_plot_params->ymax_log();
-  my $vline_at_x = $the_plot_params->vline_position(); # 
+  my $vline_position = $the_plot_params->vline_position(); # 
   my $linewidth = $the_plot_params->line_width();
 
   $commands_string =~ s/\s+$//g; # delete whitespace
@@ -446,7 +476,7 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
 	if ($log_y) {
 	  $the_plot_params->log_y(0);
 	  $the_gnuplot->gnuplot_cmd('unset log');
-	  set_arrow($the_gnuplot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
+	  set_arrow($the_gnuplot, $vline_position, $ymin, $ymax) if(defined $vline_position);
 	  $the_gnuplot->gnuplot_set_yrange($ymin, $ymax);
 	} else {
 	  $the_plot_params->log_y(1);
@@ -454,19 +484,19 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
 	  print STDERR "ll max_bin_y: ", $histogram_obj->max_bin_y(), " y_plot_factor: $y_plot_factor \n";
 	  print STDERR "ll $ymin $ymax\n";
 	  print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
-	  set_arrow($the_gnuplot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
+	  set_arrow($the_gnuplot, $vline_position, $ymin_log, $ymax_log) if(defined $vline_position);
 	  $the_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
 	}
       } elsif ($cmd eq 'ymax') {
 	if (!$log_y) {
 	  $ymax = $param;
-	  set_arrow($the_gnuplot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
+	  set_arrow($the_gnuplot, $vline_position, $ymin, $ymax) if(defined $vline_position);
 	  print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
 	  $the_gnuplot->gnuplot_set_yrange($ymin, $ymax);
 	 # $the_plot_params->ymax($ymax);
 	} else {
 	  $ymax_log = $param;
-	  set_arrow($the_gnuplot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
+	  set_arrow($the_gnuplot, $vline_position, $ymin_log, $ymax_log) if(defined $vline_position);
 	  $the_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
 	 # $the_plot_params->ymax_log($ymax_log);
 	}
@@ -502,10 +532,10 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
 	# $the_plot_params->ymax_log($ymax_log);
 	if ($log_y) {
 	  $the_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
-	  set_arrow($the_gnuplot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
+	  set_arrow($the_gnuplot, $vline_position, $ymin_log, $ymax_log) if(defined $vline_position);
 	} else {
 	  $the_gnuplot->gnuplot_set_yrange($ymin, $ymax);
-	  set_arrow($the_gnuplot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
+	  set_arrow($the_gnuplot, $vline_position, $ymin, $ymax) if(defined $vline_position);
 	}
       } elsif ($cmd eq 'r') {	# refine bins
 	$histogram_obj->change_binwidth($param? -1*$param : -1);
@@ -516,10 +546,10 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
 	# $the_plot_params->ymax_log($ymax_log);
 	if ($log_y) {
 	  $the_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
-	  set_arrow($the_gnuplot, $vline_at_x, $ymin_log, $ymax_log) if(defined $vline_at_x);
+	  set_arrow($the_gnuplot, $vline_position, $ymin_log, $ymax_log) if(defined $vline_position);
 	} else {
 	  $the_gnuplot->gnuplot_set_yrange($ymin, $ymax);
-	  set_arrow($the_gnuplot, $vline_at_x, $ymin, $ymax) if(defined $vline_at_x);
+	  set_arrow($the_gnuplot, $vline_position, $ymin, $ymax) if(defined $vline_position);
 	}
       } elsif ($cmd eq 'key') { # move the key (options are left, right, top, bottom)
 	my $new_key_position = $param // 'left'; #
