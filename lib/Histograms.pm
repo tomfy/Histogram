@@ -147,7 +147,7 @@ sub BUILD{
   my @histos_to_plot = ((1) x scalar @{$self->filecol_specifiers()});
   $self->histograms_to_plot(\@histos_to_plot); # default to plotting all (but not pooled)
   $self->load_data_from_file();
-  print "lo_limit, hi_limit, binwidth: ",  $self->lo_limit() // 'undef', " ", $self->hi_limit() // 'undef', " ", $self->binwidth() // 'undef', "\n";
+  # print "lo_limit, hi_limit, binwidth: ",  $self->lo_limit() // 'undef', " ", $self->hi_limit() // 'undef', " ", $self->binwidth() // 'undef', "\n";
 
   #  if (!(defined $self->lo_limit()  and  defined $self->hi_limit()  and  defined  $self->binwidth())) 
   # if (1 or !defined $self->binwidth()) {
@@ -170,13 +170,11 @@ sub BUILD{
     }
     $self->auto_bin($self->lo_limit(), $self->hi_limit(), $self->binwidth());
   }
-  # }
 
   my $n_bins = int( ($self->hi_limit() - $self->lo_limit())/$self->binwidth() ) + 1;
   $self->n_bins($n_bins);
 
-  print "In BUILD: ", $self->lo_limit(), "  ", $self->hi_limit(), "  ", $self->binwidth(), "  ", $self->n_bins(), "\n";
-
+  # print "In BUILD: ", $self->lo_limit(), "  ", $self->hi_limit(), "  ", $self->binwidth(), "  ", $self->n_bins(), "\n";
 }
 
 sub load_data_from_file{
@@ -185,8 +183,6 @@ sub load_data_from_file{
   my %filecol_hdata = ('pooled' => Hdata->new());
 
   my $integer_data = 1;
-  #my @histogram_titles = ();
-  #  print "AAAAAAAAAAAAAAAAAA\n";
   for my $histogram_id (@{$self->filecol_specifiers()}) { # $histogram_id e.g. 'file_x:4' or 'file_x:5+6"sum_of_5and6"'
     $filecol_hdata{$histogram_id} = Hdata->new();
     #   print "histogram id: [$histogram_id] \n";
