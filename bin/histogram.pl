@@ -8,6 +8,7 @@ use List::Util qw (min max sum);
 
 my $y_plot_factor = 1.08;
 my $y_plot_factor_log = 1.5;
+my $relative_frame_thickness = 1.5; # the thickness of frame lines rel to histogram itself
 
 use File::Basename 'dirname';
 use Cwd 'abs_path';
@@ -31,11 +32,12 @@ use Plot_params;
   my $persist = 0;
   my $do_plot = 1;
   my $log_y = 0;
-  my $key_horiz_position = 'right';
+  my $key_horiz_position = 'middle'; # 'right';
+#  print "#### $key_horiz_position \n"; sleep(1);
   my $key_vert_position = 'top';
   my $data = undef;
   my $gnuplot_command = undef;
-  my $linewidth = 1.5;
+  my $line_width = 2;
   my $terminal = 'x11'; # (for gnuplot case) qt also works. Others?
   my $ymin = 0;
   my $ymax = "*";
@@ -56,46 +58,62 @@ use Plot_params;
   my $histogram_color = undef;
   # other options for plot range: 'strict', 'loose_positive', 'loose'
   my $graphics = 'gnuplot';	# alternative is 'gd' 
-  
+
   GetOptions(
 	     'data_input|input=s' => \$data,
-	     #             'input_filename=s' => \$input_filename,
-	     #             'columns=s' => \$columns, # unit based, i.e. left-most column is 1
 	     'output_filename=s' => \$output_filename, # to send output to a (png) file, specify a filename
+
+	     # control of binning, x and y ranges:
 	     'low_limit|xmin=f' => \$lo_limit,
 	     'hi_limit|xmax=f' => \$hi_limit,
 	     'bw|binwidth|width=f' => \$binwidth,
-	     'plot!' => \$do_plot, # -noplot to suppress plot - just see histogram as text.
 	     'logy!' => \$log_y,
-	     'h_key|key_horiz_position=s' => \$key_horiz_position,
-	     'v_key|key_vert_positioqn=s' => \$key_vert_position,
-	     'command=s' => \$gnuplot_command,
-	     'linewidth|lw=f' => \$linewidth,
-	     'terminal=s' => \$terminal,
+	     'ymax=f' => \$ymax,
+	     'log_ymax=f' => \$ymax_log,
+	     'tight!' => \$tight,
+	     # how to plot (gnuplot or GD, and plot parameters)
+	     'graphics=s' => \$graphics,
+	     # whether to plot, and where (screen or file)
+	     'plot!' => \$do_plot, # -noplot to suppress plot - just see histogram as text.
 	     'screen!' => \$show_on_screen,
 	     'png!' => \$write_to_png,
 	     'interactive!' => \$interactive, # if true, plot and wait for further commands, else plot and exit
-	     'enhanced!' => \$enhanced,
-	     'ymax=f' => \$ymax,
-	     'log_ymax=f' => \$ymax_log,
-	     'vline_position=f' => \$vline_position,
+
+	     'width=f' => \$plot_width,
+	     'height=f' => \$plot_height,
+
+	     'linewidth|line_width|lw=f' => \$line_width, # line thickness for histogram
+	     'color=s' => \$histogram_color,
+
 	     'title=s' => \$plot_title,
 	     'x_axis_label|x_label|xlabel=s' => \$x_axis_label,
 	     'y_axis_label|y_label|ylabel=s' => \$y_axis_label,
-	     'tight!' => \$tight,
-	     'graphics=s' => \$graphics,
-	     'width=f' => \$plot_width,
-	     'height=f' => \$plot_height,
-	     'color=s' => \$histogram_color,
+	     'h_key|key_horiz_position=s' => \$key_horiz_position,
+	     'v_key|key_vert_positioqn=s' => \$key_vert_position,
+
+	     'vline_position=f' => \$vline_position,
+
+	     # relevant to gnuplot
+	     'terminal=s' => \$terminal, # x11, qt, etc.
+	     'command=s' => \$gnuplot_command,
+	     'enhanced!' => \$enhanced,
 	    );
 
-   print "vline position: ", $vline_position // "undef", "\n";
-  print "color: ", $histogram_color // "undef", "\n";
-  print "title: ", $plot_title // "undef", "\n";
-  print "x_axis_label: ", $x_axis_label // "undef", "\n";
-  print "y_axis_label: ", $y_axis_label // "undef", "\n";
+  if (lc $graphics eq 'gd') {
+    print STDERR "GD graphics; setting terminal to only supported options: png \n" if(lc $terminal ne 'png');
+    $terminal = 'png';
+  } elsif (lc $graphics eq 'gnuplot') {
+  } else {
+    die "Graphics option $graphics is unknown. Allowed options are 'gnuplot' and 'gd'.\n";
+  }
+
+  print "vline position: ", $vline_position // "undef", "\n";
+#  print "# key horiz position: $key_horiz_position \n"; sleep(2);
+  # print "color: ", $histogram_color // "undef", "\n";
+  # print "title: ", $plot_title // "undef", "\n";
+  # print "x_axis_label: ", $x_axis_label // "undef", "\n";
+  # print "y_axis_label: ", $y_axis_label // "undef", "\n";
   print "binwidth: ", $binwidth // "undef", "\n";
-  # sleep(5);
 
   $lo_limit = undef if($lo_limit eq 'auto'); # now default is 0.
 
@@ -121,24 +139,41 @@ use Plot_params;
 
   print "graphics will use: ", lc $graphics, "\n";
 
-    $ymax_log = $y_plot_factor_log*$histogram_obj->max_bin_y();
-    $ymax = $y_plot_factor*$histogram_obj->max_bin_y();
+  $ymax_log = $y_plot_factor_log*$histogram_obj->max_bin_y();
+  $ymax = $y_plot_factor*$histogram_obj->max_bin_y();
+  my $plot_params = Plot_params->new(
+				     output_filename => $output_filename,
+				     terminal => $terminal,
+				     width => $plot_width,
+				     height => $plot_height,
+				     line_width => $line_width,
+				     histogram_color => $histogram_color,
+				     plot_title => $plot_title,
+				     x_axis_label => $x_axis_label,
+				     y_axis_label => $y_axis_label,
+				     key_horiz_position => $key_horiz_position,
+				     key_vert_position => $key_vert_position,
 
+				     log_y => $log_y,
+				     ymin => $ymin, ymax => $ymax,
+				     ymin_log => $ymin_log, ymax_log => $ymax_log,
+
+				     vline_position => $vline_position,
+				    );
+  #print "# line width: ", $plot_params->line_width(), "\n"; # sleep(4);
 
   if (lc $graphics eq 'gnuplot') {	# Use gnuplot
+
+    
     use Graphics::GnuplotIF qw(GnuplotIF);
     my $plot_gnuplot = Graphics::GnuplotIF->new( persist => $persist, style => 'histeps');
-    print "### axis labels: $x_axis_label  $y_axis_label\n";
-    $plot_gnuplot->gnuplot_cmd("set terminal $terminal noenhanced linewidth $linewidth size $plot_width, $plot_height");
+    $plot_gnuplot->gnuplot_cmd("set terminal $terminal noenhanced linewidth $line_width size $plot_width, $plot_height");
     $plot_gnuplot->gnuplot_set_xlabel($x_axis_label) if(defined $x_axis_label);
     $plot_gnuplot->gnuplot_set_ylabel($y_axis_label) if(defined $y_axis_label);
 
-    my $plot_params = Plot_params->new( log_y => $log_y, ymin => $ymin, ymax => $ymax, ymin_log => $ymin_log, ymax_log => $ymax_log,
-			    vline_position => $vline_position, line_width => $linewidth);
-
     if ($log_y) {
       $plot_gnuplot->gnuplot_cmd('set log y');
-      $plot_gnuplot->gnuplot_set_yrange(0.8, (defined $ymax_log)? $ymax_log : '*');
+      $plot_gnuplot->gnuplot_set_yrange($ymin_log, (defined $ymax_log)? $ymax_log : '*');
       set_arrow($plot_gnuplot, $vline_position, $ymin_log, $ymax_log) if(defined $vline_position);
     } else {
       if (defined $vline_position) {
@@ -149,14 +184,14 @@ use Plot_params;
 
     my $key_pos_cmd = 'set key ' . "$key_horiz_position  $key_vert_position";
     $plot_gnuplot->gnuplot_cmd($key_pos_cmd);
-    $plot_gnuplot->gnuplot_cmd('set border lw 1.25'); # apparently this width is relative to that for the histogram lines.
+    $plot_gnuplot->gnuplot_cmd("set border lw $relative_frame_thickness"); # apparently this width is relative to that for the histogram lines.
     $plot_gnuplot->gnuplot_cmd('set mxtics');
     $plot_gnuplot->gnuplot_cmd('set tics out');
     $plot_gnuplot->gnuplot_cmd('set tics scale 2,1');
     $plot_gnuplot->gnuplot_cmd($gnuplot_command) if(defined $gnuplot_command);
 
     if ($write_to_png) {
-      $plot_gnuplot->gnuplot_hardcopy($output_filename . '.png', "png $enhanced linewidth $linewidth");
+      $plot_gnuplot->gnuplot_hardcopy($output_filename, " png $enhanced linewidth $line_width");
       $plot_gnuplot->gnuplot_cmd("set out $output_filename");
       plot_the_plot_gnuplot($histogram_obj, $plot_gnuplot);
       $plot_gnuplot->gnuplot_restore_terminal();
@@ -173,13 +208,21 @@ use Plot_params;
       }
     }
   }elsif (lc $graphics eq 'gd') { # Use GD
-      use GD;
+    use GD;
       plot_the_plot_gd($histogram_obj,
-		       {vline_position => $vline_position,
-			histogram_color => $histogram_color,
-			plot_title => $plot_title,
-			x_axis_label => $x_axis_label,
-			y_axis_label => $y_axis_label}
+		       # {output_filename => $output_filename,
+		       # 	width => $plot_width,
+		       # 	height => $plot_height,
+		       # 	linewidth => $line_width,
+		       # 	histogram_color => $histogram_color,
+		       # 	plot_title => $plot_title,
+		       # 	x_axis_label => $x_axis_label,
+		       # 	y_axis_label => $y_axis_label,
+		       # 	key_horiz_position => $key_horiz_position,
+		       # 	key_vert_position => $key_vert_position,
+
+		       # 	vline_position => $vline_position}
+		       $plot_params
 		      );
   # my $vline_position = $parameters->{vline_position} // undef;
   # my $histogram_color = $parameters->{histogram_color} // undef; # default is black (then blue, green, red, ... if multiple histograms)
@@ -205,10 +248,10 @@ sub plot_the_plot_gnuplot{
   my @plot_titles = ();
 
   my @histo_bin_counts = ();
-  while (my ($hi, $plt) = each @{$histogram_obj->histograms_to_plot()} ) {
+  while (my ($i_histogram, $plt) = each @{$histogram_obj->histograms_to_plot()} ) {
     if ($plt == 1) {
-      print STDERR "adding histogram w index $hi.\n";
-      my $fcspec = $histogram_obj->filecol_specifiers()->[$hi];
+      print STDERR "adding histogram w index $i_histogram.\n";
+      my $fcspec = $histogram_obj->filecol_specifiers()->[$i_histogram];
       my $hdata_obj = $histogram_obj->filecol_hdata()->{$fcspec};
       my $bincounts = $hdata_obj->bin_counts();
       push @plot_titles, $hdata_obj->label();
@@ -234,14 +277,25 @@ sub set_arrow{
 ### GD plotting:
 sub plot_the_plot_gd{
   my $histogram_obj = shift;
-  my $parameters = shift; #
-  my $vline_position = $parameters->{vline_position} // undef;
-  my $histogram_color = $parameters->{histogram_color} // undef; # default is black (then blue, green, red, ... if multiple histograms)
-  my $plot_title = $parameters->{plot_title} // undef;
-  my $x_axis_label = $parameters->{x_axis_label} // undef;
-  my $y_axis_label = $parameters->{y_axis_label} // undef;
+  my $parameters = shift;
+  #my $parameters = shift; #
+  my $output_filename = $parameters->output_filename();
+  my $width = $parameters->width();
+  my $height = $parameters->height();
+  my $line_width = $parameters->line_width(); # line width for histogram, frame etc. are relative to this.
+  my $histogram_color = $parameters->histogram_color() // undef; # default is black (then blue, green, red, ... if multiple histograms)
+  my $plot_title = $parameters->plot_title() // undef;
+  my $x_axis_label = $parameters->x_axis_label() // undef;
+  my $y_axis_label = $parameters->y_axis_label() // undef;
+  my $key_horiz_position = $parameters->key_horiz_position();
+  my $key_vert_position = $parameters->key_vert_position();
+  my $ymin = $parameters->ymin();
+  my $ymax = $parameters->ymax();
+
+  my $vline_position = $parameters->vline_position() // undef;
+
   my $filecol_hdata = $histogram_obj->filecol_hdata();
-  open my $fhout, ">", "histogram.png";
+  open my $fhout, ">", "$output_filename";
 
   # print "vline position: ", $vline_position // "undef", "\n";
   # print "color: ", $histogram_color // "undef", "\n";
@@ -249,31 +303,38 @@ sub plot_the_plot_gd{
   # print "x_axis_label: ", $x_axis_label // "undef", "\n";
   # print "y_axis_label: ", $y_axis_label // "undef", "\n";
   # sleep(5);
-  
-  my $width = 800;
-  my $height = 600;
+
   my $char_width = 8; # these are the dimensions of GD's
   my $char_height = 16; # gdLargeFont characters, according to documentation.
   my $image = GD::Image->new($width, $height);
   my %colors = (black => $image->colorAllocate(0, 0, 0),
 		white => $image->colorAllocate(255, 255, 255),
-		blue => $image->colorAllocate(80, 80, 225),
+		blue => $image->colorAllocate(50, 80, 255),
 		green => $image->colorAllocate(20,130,20),
 		red => $image->colorAllocate(150,20,20));
   my $black = $colors{black};
   my @histogram_colors = ('black', 'blue', 'green', 'red');
   $image->filledRectangle(0, 0, $width-1, $height-1, $colors{white});
 
-  my $margin = 24;		# margin width (in pixels)
+  my $margin = 28;		# margin width (in pixels)
   my $tick_length_pix = 6;
   my $x_axis_label_space = 3*$tick_length_pix + 2.5*$char_height;
   my $y_axis_label_space = 3*$tick_length_pix + (0.5 + length int($histogram_obj->max_bin_y()))*$char_width + ((defined $y_axis_label)? 2*$char_height : 0);
-  print "length max_bin_y: ", length int($histogram_obj->max_bin_y()), "\n";
+
   my $frame_L_pix = $margin + $y_axis_label_space;
   my $frame_R_pix = $width - $margin;
   my $frame_T_pix = $margin;
   my $frame_B_pix = $height - ($margin + $x_axis_label_space);
-  my $frame_line_thickness = 3;
+
+  my $h_label_x_fraction = 0.1; # default histogram label horiz position is 'left'
+  if($key_horiz_position eq 'middle'  or  $key_horiz_position eq 'center'){
+    $h_label_x_fraction = 0.35;
+  }elsif($key_horiz_position eq 'right'){
+    $h_label_x_fraction = 0.6;
+  }
+  my $label_x_pix = (1.0 - $h_label_x_fraction)*$frame_L_pix + $h_label_x_fraction*$frame_R_pix;
+  
+  my $frame_line_thickness = $relative_frame_thickness*$line_width;
   $image->setThickness($frame_line_thickness);
   my $frame = GD::Polygon->new();
   $frame->addPt($frame_L_pix, $frame_B_pix);
@@ -284,8 +345,8 @@ sub plot_the_plot_gd{
 
   my $xmin = $histogram_obj->lo_limit();
   my $xmax = $histogram_obj->hi_limit();
-  my $ymin = 0;
-  my $ymax = $histogram_obj->max_bin_y()*$y_plot_factor;
+ # my $ymin = 0;
+ # my $ymax = $histogram_obj->max_bin_y()*$y_plot_factor;
   # log scale not implemented, so don't need $ymin_log, $ymax_log
   my $bin_width = $histogram_obj->binwidth();
 
@@ -300,8 +361,10 @@ sub plot_the_plot_gd{
     if ($i%5 == 0) {
       $image->line($xpix, $frame_B_pix, $xpix, $frame_B_pix + 2*$tick_length_pix, $black);
       $image->string(gdLargeFont, $xpix - 0.5*(length $tick_x)*$char_width, $frame_B_pix + 3*$tick_length_pix, $tick_x, $black);
+      $image->line($xpix, $frame_T_pix, $xpix, $frame_T_pix - 2*$tick_length_pix, $black);
     } else {
       $image->line($xpix, $frame_B_pix, $xpix, $frame_B_pix + $tick_length_pix, $black);
+      $image->line($xpix, $frame_T_pix, $xpix, $frame_T_pix - $tick_length_pix, $black);
     }
     $tick_x += $tick_spacing_x;
   }
@@ -327,14 +390,15 @@ sub plot_the_plot_gd{
     if ($i%5 == 0) {
       $image->line($frame_L_pix, $ypix, $frame_L_pix - 2*$tick_length_pix, $ypix, $black);
       $image->string(gdLargeFont, $frame_L_pix - 3*$tick_length_pix - (length $tick_y)*$char_width, $ypix-0.5*$char_height, $tick_y, $black);
+      $image->line($frame_R_pix, $ypix, $frame_R_pix + 2*$tick_length_pix, $ypix, $black);
       $max_tick_chars = max($max_tick_chars, length $tick_y);
     } else {
       $image->line($frame_L_pix, $ypix, $frame_L_pix - $tick_length_pix, $ypix, $black);
+      $image->line($frame_R_pix, $ypix, $frame_R_pix + $tick_length_pix, $ypix, $black);
     }
     $tick_y += $tick_spacing_y;
   }
 
-  print "max tick characters: $max_tick_chars \n";
     # add a label to the y axis:
   if (defined $y_axis_label) {
     my $label_length = length $y_axis_label;
@@ -344,17 +408,19 @@ sub plot_the_plot_gd{
 		   $y_axis_label, $black);
   }
 
-  # draw the histogram
-  my $histogram_line_thickness = 2;
+  ##########################
+  ##  draw the histogram  ##
+  ##########################
+  my $histogram_line_thickness = $line_width;
   $image->setThickness($histogram_line_thickness);
   my @ids = keys %$filecol_hdata;
   my $n_histograms = (scalar @ids); # - 1; # subtract 1 to exclude the pooled histogram
  
 #  for (my $i = 0; $i < $n_histograms; $i++) {
-  while (my ($hi, $plt) = each @{$histogram_obj->histograms_to_plot()} ) {
+  while (my ($histogram_index, $plt) = each @{$histogram_obj->histograms_to_plot()} ) {
     if ($plt == 1) {
-      print STDERR "adding histogram w index $hi.\n";
-      my $fcspec = $histogram_obj->filecol_specifiers()->[$hi];
+      print STDERR "adding histogram w index $histogram_index.\n";
+      my $fcspec = $histogram_obj->filecol_specifiers()->[$histogram_index];
       my $hdata_obj = $histogram_obj->filecol_hdata()->{$fcspec};
       my $bincounts = $hdata_obj->bin_counts();
       # my $id = $ids[$i];
@@ -378,13 +444,13 @@ sub plot_the_plot_gd{
       $xpix = $frame_R_pix;
       $ypix = $frame_B_pix;
       $hline->addPt($xpix, $ypix);
-      my $color = ($hi == 0  and  defined $histogram_color)? $histogram_color : $histogram_colors[$hi % 3];
-      print "[$hi]  $histogram_color  $color\n";
+      my $color = ($histogram_index == 0  and  defined $histogram_color)? $histogram_color : $histogram_colors[$histogram_index % 4];
+      # print "[$histogram_index]  [$histogram_color]  [$color]\n";
       $image->unclosedPolygon($hline, $colors{$color});
       # my $label = $hdata_obj->label();
       if (defined $hdata_obj->label()  and  length $hdata_obj->label() > 0) {
-	my $label_x_pix = 0.9*$frame_L_pix + 0.1*$frame_R_pix;
-	my $label_y_pix = 0.9*$frame_T_pix + 0.1*$frame_B_pix + $hi*$char_height;
+
+	my $label_y_pix = 0.94*$frame_T_pix + 0.06*$frame_B_pix + $histogram_index*$char_height;
 	$image->line($label_x_pix - 25, $label_y_pix + 0.5*$char_height, $label_x_pix - 5, $label_y_pix + 0.5*$char_height, $colors{$color});
 	$image->string(gdLargeFont, $label_x_pix, $label_y_pix, $hdata_obj->label(), $black);
       }
@@ -408,7 +474,7 @@ sub plot_the_plot_gd{
   my $title_y_pix = 0.97*$frame_T_pix + 0.03*$frame_B_pix;
   $image->string(gdLargeFont, $title_x_pix, $title_y_pix, $plot_title, $black);
 }
-  
+
   binmode $fhout;
   print $fhout $image->png;
   close $fhout;
@@ -442,6 +508,8 @@ sub tick_spacing{
 sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4 or xmax:0.2;ymax:2000q
   my $histogram_obj = shift;
   my $the_plot_params = shift; # instance of Plot_params
+   # my $plot_params = shift; # Plot_params->new( log_y => $log_y, ymin => $ymin, ymax => $ymax, ymin_log => $ymin_log, ymax_log => $ymax_log,
+   # 			    vline_position => $vline_position, line_width => $line_width);
   my $the_gnuplot = shift; # $plot_gnuplot instance of Graphics::GnuplotIF
   my $commands_string = shift;
 #  my $plot = $the_plot_params->plot_obj();
@@ -451,7 +519,7 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
   my $ymin_log = $the_plot_params->ymin_log();
   my $ymax_log = $the_plot_params->ymax_log();
   my $vline_position = $the_plot_params->vline_position(); # 
-  my $linewidth = $the_plot_params->line_width();
+  my $line_width = $the_plot_params->line_width();
 
   $commands_string =~ s/\s+$//g; # delete whitespace
   return 1 if($commands_string eq 'q');
@@ -565,7 +633,7 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
       } elsif ($cmd eq 'export') {
 	$param =~ s/'//g; # the name of the file to export to; the format will be png, and '.png' will be added to filename
 
-	$the_gnuplot->gnuplot_hardcopy($param . '.png', "png linewidth $linewidth");
+	$the_gnuplot->gnuplot_hardcopy($param, " png linewidth $line_width");
 	plot_the_plot_gnuplot($histogram_obj, $the_gnuplot);
 	$the_gnuplot->gnuplot_restore_terminal();
       } elsif ($cmd eq 'off') {
@@ -585,7 +653,6 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
       $the_plot_params->ymin_log($ymin_log);
       $the_plot_params->ymax($ymax);
       $the_plot_params->ymax_log($ymax_log);
-      
     }
   }
   return 0;
