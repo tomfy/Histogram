@@ -12,6 +12,75 @@ use POSIX qw ( floor ceil );
 
 # store various numbers that will be used both gnuplot and gd
 
+has output_filename => (
+			isa => 'Str',
+			is => 'rw',
+			required => 0,
+			default => 'histogram.png',
+		       );
+
+has width => (
+	      isa => 'Int',
+	      is => 'rw',
+	      required => 0,
+	      default => 640,
+	     );
+
+has height => (
+	       isa => 'Int',
+	       is => 'rw',
+	       required => 0,
+	       default => 480,
+	      );
+
+has line_width => (
+	      isa => 'Num',
+	      is => 'rw',
+	      required => 0,
+	      default => 1,
+	    );
+
+has histogram_color => (
+			isa => 'Maybe[Str]',
+			is => 'rw',
+			required => 0,
+			default => undef,
+		       );
+
+has plot_title => (
+		   isa => 'Maybe[Str]',
+		   is => 'rw',
+		   required => 0,
+		   default => undef,
+		  );
+
+has x_axis_label => (
+		 isa => 'Maybe[Str]',
+		 is => 'rw',
+		 required => 0,
+		 default => undef,
+		);
+
+has y_axis_label => (
+		 isa => 'Maybe[Str]',
+		 is => 'rw',
+		 required => 0,
+		 default => undef,
+		);
+
+has key_horiz_position => (
+			isa => 'Str',
+			is => 'rw',
+			required => 0,
+			default => 'right', # left, middle, center, right
+		       );
+has key_vert_position => (
+			isa => 'Str',
+			is => 'rw',
+			required => 0,
+			default => 'top', # top, middle, bottom
+		       );
+
 has log_y => (
 	       isa => 'Bool',
 	       is => 'rw',
@@ -46,12 +115,5 @@ has vline_position => (
 		       required => 0,
 		       default => undef,
 		      );
-
-has line_width => (
-		   isa => 'Num',
-		   is => 'rw',
-		   required => 0,
-		   default => 1,
-		   );
 
 1;
