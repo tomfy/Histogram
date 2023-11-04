@@ -714,6 +714,8 @@ sub data_min_max{
   return ($self->filecol_hdata->{'pooled'}->min(), $self->filecol_hdata->{'pooled'}->max());
 }
 
+__PACKAGE__->meta->make_immutable;
+
 1;
 
 
