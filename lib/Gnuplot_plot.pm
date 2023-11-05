@@ -20,11 +20,11 @@ has histograms => (
 		  );
 
 has gnuplotIF => ( # this is the object constructed with Graphics::GnuplotIF->new(...
-	      isa => 'Maybe[Object]',
-	      is => 'rw',
-	      required => 0,
-	      default => undef,
-		);
+		  isa => 'Maybe[Object]',
+		  is => 'rw',
+		  required => 0,
+		  default => undef,
+		 );
 
 has persist => (
 		isa => 'Bool',
@@ -38,7 +38,7 @@ has terminal => (
 		 is => 'rw',
 		 required => 0,
 		 default => 'x11',
-		 );
+		);
 
 has width => (
 	      isa => 'Int',
@@ -90,25 +90,25 @@ has key_horiz_position => (
 			  );
 
 has key_vert_position => (
-			   isa => 'Str',
-			   is => 'rw',
-			   required => 0,
-			   default => 'top',
-			  );
+			  isa => 'Str',
+			  is => 'rw',
+			  required => 0,
+			  default => 'top',
+			 );
 
-has xmin => (
-	     isa => 'Maybe[Num]',
-	     is => 'rw',
-	     required => 0,
-	     default => undef,
-	    );
+# has xmin => (
+# 	     isa => 'Maybe[Num]',
+# 	     is => 'rw',
+# 	     required => 0,
+# 	     default => undef,
+# 	    );
 
-has xmax => (
-	     isa => 'Maybe[Num]',
-	     is => 'rw',
-	     required => 0,
-	     default => undef,
-	    );
+# has xmax => (
+# 	     isa => 'Maybe[Num]',
+# 	     is => 'rw',
+# 	     required => 0,
+# 	     default => undef,
+# 	    );
 
 has ymin => (
 	     isa => 'Maybe[Num]',
@@ -123,6 +123,20 @@ has ymax => (
 	     required => 0,
 	     default => undef,
 	    );
+
+has ymin_log => (
+		 isa => 'Maybe[Num]',
+		 is => 'rw',
+		 required => 0,
+		 default => undef,
+		);
+
+has ymax_log => (
+		 isa => 'Maybe[Num]',
+		 is => 'rw',
+		 required => 0,
+		 default => undef,
+		);
 
 has line_width => (
 		   isa => 'Num',
@@ -165,10 +179,10 @@ has y_axis_label => (
 		    );
 
 has log_y => (
-		isa => 'Bool',
-		is => 'rw',
-		required => 0,
-		default => 0,
+	      isa => 'Bool',
+	      is => 'rw',
+	      required => 0,
+	      default => 0,
 	     );
 
 has vline_position => (
@@ -176,7 +190,7 @@ has vline_position => (
 		       is => 'rw',
 		       required => 0,
 		       default => undef,
-		       );
+		      );
 
 # has color => (
 # 	      isa => 'Maybe[Str]',
@@ -196,13 +210,19 @@ has vline_position => (
 # 	       # },
 # 	      );
 
+has output_filename => (
+			isa => 'Str',
+			is => 'rw',
+			required => 0,
+			default => 'histogram.png',
+		       );
 
 sub BUILD{
   my $self = shift;
 
   my $bin_width = $self->histograms->binwidth;
-  my $xmin = $self->xmin;
-  my $xmax = $self->xmax;
+  my $xmin = $self->histograms->lo_limit; #xmin;
+  my $xmax = $self->histograms->hi_limit; #xmax;
 
   my $gnuplotIF = Graphics::GnuplotIF->new(persist => $self->persist, style => 'histeps');
   $self->gnuplotIF($gnuplotIF);
@@ -213,21 +233,21 @@ sub BUILD{
   $gnuplotIF->gnuplot_set_xlabel($self->x_axis_label) if(defined $self->x_axis_label);
   $gnuplotIF->gnuplot_set_ylabel($self->y_axis_label) if(defined $self->y_axis_label);
 
- if ($self->log_y()) {
-      $gnuplotIF->gnuplot_cmd('set log y');
-      my $ymax_log = $self->ymax_log();
-      $gnuplotIF->gnuplot_set_yrange($self->ymin_log(), $ymax_log // '*');
-    } else {
-      my $ymax = $self->ymax();
-      $gnuplotIF->gnuplot_set_yrange($self->ymin(), $ymax // '*');
-    }
+  if ($self->log_y()) {
+    $gnuplotIF->gnuplot_cmd('set log y');
+    my $ymax_log = $self->ymax_log();
+    $gnuplotIF->gnuplot_set_yrange($self->ymin_log(), $ymax_log // '*');
+  } else {
+    my $ymax = $self->ymax();
+    $gnuplotIF->gnuplot_set_yrange($self->ymin(), $ymax // '*');
+  }
 
-     my $key_pos_cmd = 'set key ' . $self->key_horiz_position . " " .  $self->key_vert_position;
-    $gnuplotIF->gnuplot_cmd($key_pos_cmd);
-    $gnuplotIF->gnuplot_cmd("set border lw " . $self->relative_frame_thickness());
-    $gnuplotIF->gnuplot_cmd('set mxtics');
-    $gnuplotIF->gnuplot_cmd('set tics out');
-    $gnuplotIF->gnuplot_cmd('set tics scale 2,1');
+  my $key_pos_cmd = 'set key ' . $self->key_horiz_position . " " .  $self->key_vert_position;
+  $gnuplotIF->gnuplot_cmd($key_pos_cmd);
+  $gnuplotIF->gnuplot_cmd("set border lw " . $self->relative_frame_thickness());
+  $gnuplotIF->gnuplot_cmd('set mxtics');
+  $gnuplotIF->gnuplot_cmd('set tics out');
+  $gnuplotIF->gnuplot_cmd('set tics scale 2,1');
   #  $gnuplotIF->gnuplot_cmd($other_gnuplot_command) if(defined $other_gnuplot_command);
 
 }
@@ -238,10 +258,7 @@ sub draw_histograms{
   my $histograms_obj = $self->histograms;
   my $gnuplotIF = $self->gnuplotIF;
 
-  my ($xmin, $xmax) = ($self->xmin, $self->xmax);
-  my ($ymin, $ymax) = ($self->ymin, $self->ymax);
-
-  $gnuplotIF->gnuplot_set_xrange($xmin, $xmax);
+  $gnuplotIF->gnuplot_set_xrange($histograms_obj->lo_limit, $histograms_obj->hi_limit);
   my $bin_centers = $histograms_obj->filecol_hdata()->{pooled}->bin_centers();
   my @plot_titles = ();
 
@@ -256,11 +273,9 @@ sub draw_histograms{
       push @histo_bin_counts, $bincounts; # push an array ref holding the bin counts ...
     }
   }
-      #
+  $self->draw_vline(); # will put a vertical line, if $self->vline_position is defined. (needs to happen before gnuplot_plot_xy)
   $gnuplotIF->gnuplot_set_plot_titles(@plot_titles);
   $gnuplotIF->gnuplot_plot_xy($bin_centers, @histo_bin_counts);
-  print "bottom of draw_histograms (gnuplot).\n";
-  # sleep(3);
 }
 
 
@@ -272,16 +287,13 @@ sub draw_vline{
   if (defined $vline_x) {
     $gnuplotIF->gnuplot_cmd("unset arrow");
     $gnuplotIF->gnuplot_cmd("set arrow nohead from $vline_x, graph 0 to $vline_x, graph 1 lw 1 dt 2");
-    print "Drew vline at x = ", $vline_x, "\n";
+    print "Drew vline at x = ", $vline_x, "\n"; # sleep(3);
   }
 }
 
 sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4 or xmax:0.2;ymax:2000q
- my $self = shift;
+  my $self = shift;
   my $histograms_obj = $self->histograms;
-  # my $the_plot_params = shift;	# instance of Plot_params
-  # my $plot_params = shift; # Plot_params->new( log_y => $log_y, ymin => $ymin, ymax => $ymax, ymin_log => $ymin_log, ymax_log => $ymax_log,
-  # 			    vline_position => $vline_position, line_width => $line_width);
   my $gnuplotIF = $self->gnuplotIF; # $gnuplot_plot instance of Graphics::GnuplotIF
   my $commands_string = shift;
   #  my $plot = $the_plot_params->plot_obj();
@@ -290,7 +302,6 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
   my $ymax = $self->ymax();
   my $ymin_log = $self->ymin_log();
   my $ymax_log = $self->ymax_log();
- # my $vline_position = $self->vline_position(); # 
   my $line_width = $self->line_width();
 
   $commands_string =~ s/\s+$//g; # delete whitespace
@@ -309,15 +320,15 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
     $cmd =~ s/\s+//g;
 
     if (defined $cmd) {
-      $commands_string =~ s/\s+//g if($cmd ne 'xlabel');
+      # $commands_string =~ s/\s+//g if($cmd ne 'xlabel');
       if ($cmd eq 'g') {
 	$gnuplotIF->gnuplot_cmd('set grid');
       } elsif ($cmd eq 'll') {
-	if ($log_y) {
+	if ($log_y) {		# was log scale; go to linear scale
 	  $self->log_y(0);
 	  $gnuplotIF->gnuplot_cmd('unset log');
 	  $gnuplotIF->gnuplot_set_yrange($ymin, $ymax);
-	} else {
+	} else {		# was linear scale; go to log scale
 	  $self->log_y(1);
 	  $gnuplotIF->gnuplot_cmd('set log y');
 	  print STDERR "ll max_bin_y: ", $histograms_obj->max_bin_y(), " y_plot_factor: $y_plot_factor \n";
@@ -344,42 +355,6 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
 	  $gnuplotIF->gnuplot_set_yrange($ymin_log, $ymax_log);
 	  # $self->ymin_log($ymin_log);
 	}
-      } elsif ($cmd eq 'x') {	# expand (or contract) x range.
-	$histograms_obj->expand_range($param);
-	$histograms_obj->bin_data();
-      } elsif ($cmd eq 'bw') {	# set the bin width
-	$histograms_obj->set_binwidth($param);
-	$histograms_obj->bin_data();
-      } elsif ($cmd eq 'lo' or $cmd eq 'low' or $cmd eq 'xmin') { # change low x-scale limit
-	$histograms_obj->change_range($param, undef);
-	$histograms_obj->bin_data();
-      } elsif ($cmd eq 'hi' or $cmd eq 'xmax') { # change high x-scale limit
-	$histograms_obj->change_range(undef, $param);
-	$histograms_obj->bin_data();
-      } elsif ($cmd eq 'c') {	# coarsen bins
-	$histograms_obj->change_binwidth($param);
-	$histograms_obj->bin_data();
-	$ymax = $histograms_obj->max_bin_y()*$y_plot_factor;
-	# $self->ymax($ymax);
-	$ymax_log = $histograms_obj->max_bin_y()*$y_plot_factor_log;
-	# $self->ymax_log($ymax_log);
-	if ($log_y) {
-	  $gnuplotIF->gnuplot_set_yrange($ymin_log, $ymax_log);
-	} else {
-	  $gnuplotIF->gnuplot_set_yrange($ymin, $ymax);
-	}
-      } elsif ($cmd eq 'r') {	# refine bins
-	$histograms_obj->change_binwidth($param? -1*$param : -1);
-	$histograms_obj->bin_data();
-	$ymax = $histograms_obj->max_bin_y()*$y_plot_factor;
-	# $self->ymax($ymax);
-	$ymax_log = $histograms_obj->max_bin_y()*$y_plot_factor_log;
-	# $self->ymax_log($ymax_log);
-	if ($log_y) {
-	  $gnuplotIF->gnuplot_set_yrange($ymin_log, $ymax_log);
-	} else {
-	  $gnuplotIF->gnuplot_set_yrange($ymin, $ymax);
-	}
       } elsif ($cmd eq 'key') { # move the key (options are left, right, top, bottom)
 	my $new_key_position = $param // 'left'; #
 	$new_key_position =~ s/,/ /; # so can use e.g. left,bottom to move both horiz. vert. at once
@@ -396,7 +371,7 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
 
 	$gnuplotIF->gnuplot_hardcopy($param, " png linewidth $line_width");
 	# plot_the_plot_gnuplot($histograms_obj, $gnuplotIF, $vline_position);
-	$self->draw_histogram();
+	$self->draw_histograms();
 	$self->draw_vline();
 	$gnuplotIF->gnuplot_restore_terminal();
       } elsif ($cmd eq 'off') {
@@ -408,10 +383,36 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
 	  $param = $1;
 	}
 	$gnuplotIF->gnuplot_cmd("$param");
+      } else {		      # these commands require bin_data, etc. 
+	if ($cmd eq 'x') {    # expand (or contract) x range.
+	  $histograms_obj->expand_range($param);
+	} elsif ($cmd eq 'bw') { # set the bin width
+	  $histograms_obj->set_binwidth($param);
+	} elsif ($cmd eq 'lo' or $cmd eq 'low' or $cmd eq 'xmin') { # change low x-scale limit
+	  $histograms_obj->change_range($param, undef);
+	} elsif ($cmd eq 'hi' or $cmd eq 'xmax') { # change high x-scale limit
+	  $histograms_obj->change_range(undef, $param);
+	} elsif ($cmd eq 'c') {	# coarsen bins
+	  $histograms_obj->change_binwidth($param);
+	} elsif ($cmd eq 'r') {	# refine bins
+	  $histograms_obj->change_binwidth($param? -1*$param : -1);
+	}else{
+	  print "Command $cmd is unknown. Command is ignored.\n";
+	  return 0;
+	}
+      	$histograms_obj->bin_data();
+	$ymax = $histograms_obj->max_bin_y()*$y_plot_factor;
+	$ymax_log = $histograms_obj->max_bin_y()*$y_plot_factor_log;
+	if ($log_y) {
+	  $gnuplotIF->gnuplot_set_yrange($ymin_log, $ymax_log);
+	} else {
+	  $gnuplotIF->gnuplot_set_yrange($ymin, $ymax);
+	}
       }
+
       print STDERR "max_bin_y: ", $histograms_obj->max_bin_y(), " y_plot_factor: $y_plot_factor \n";
       #plot_the_plot_gnuplot($histograms_obj, $gnuplotIF, $vline_position);
-      $self->draw_histogram();
+      $self->draw_histograms();
       $self->draw_vline();
 
       $self->ymin($ymin);
@@ -422,35 +423,6 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
   }
   return 0;
 }
-
-# sub x_pix{
-#   my $self = shift;
-#   my $x = shift;
-#   my $x_pix = $self->frame_L_pix + ($x-$self->xmin())/($self->xmax() - $self->xmin()) * ($self->frame_R_pix() - $self->frame_L_pix());
-#   return $x_pix;
-# }
-
-# sub y_pix{
-#   my $self = shift;
-#   my $y = shift;
-#   my $y_pix = $self->frame_B_pix + ($y-$self->ymin())/($self->ymax() - $self->ymin()) * ($self->frame_T_pix() - $self->frame_B_pix());
-#   return $y_pix;
-# }
-
-# sub tick_spacing{
-#   # put approx. 20 tick marks
-#   my $max_data = shift;
-#   my @spacing_options = (1,2,4,5,10);
-#   my $int_log10_max_data = int( log($max_data)/log(10) );
-#   my $z = $max_data/(10**$int_log10_max_data); # should be in range 1 <= $z < 10
-#   for my $sopt (@spacing_options) {
-#     if ($sopt > $z) {
-#       my $ts = $sopt*(10**$int_log10_max_data)/20;
-#       return $ts;
-#     }
-#   }
-#   print STDERR "### $max_data  $int_log10_max_data \n";
-# }
 
 __PACKAGE__->meta->make_immutable;
 
