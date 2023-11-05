@@ -12,12 +12,25 @@ use POSIX qw ( floor ceil );
 
 # store various numbers that will be used both gnuplot and gd
 
+has persist => (
+		isa => 'Bool',
+		is => 'rw',
+		required => 0,
+		default => 1,
+		);
+
 has output_filename => (
 			isa => 'Str',
 			is => 'rw',
 			required => 0,
 			default => 'histogram.png',
 		       );
+has terminal => (
+		 isa => 'Str',
+		 is => 'rw',
+		 required => 0,
+		 default => 'x11',
+		 );
 
 has width => (
 	      isa => 'Int',
@@ -38,7 +51,14 @@ has line_width => (
 	      is => 'rw',
 	      required => 0,
 	      default => 1,
-	    );
+		  );
+
+has relative_frame_thickness => ( # thickness of line framing the plot relative to histogram linewidth
+				 isa => 'Num',
+				 is => 'rw',
+				 required => 0,
+				 default => 1.5,
+				 );
 
 has histogram_color => (
 			isa => 'Maybe[Str]',
@@ -79,7 +99,19 @@ has key_vert_position => (
 			is => 'rw',
 			required => 0,
 			default => 'top', # top, middle, bottom
-		       );
+			 );
+
+has xmin => ( # value of x coord at left edge of graph (linear scale)
+                  isa => 'Num', # e.g. '0v1:2,3,4; 0v2:4,7,10' -> histogram cols 2,3,4 of file 0v1, and cols 4,7,10 of file 0v2
+                  is => 'rw',
+                  required => 1,
+	    );
+
+has xmax => ( # value of x coord at right edge of graph (linear scale)
+                  isa => 'Num', # e.g. '0v1:2,3,4; 0v2:4,7,10' -> histogram cols 2,3,4 of file 0v1, and cols 4,7,10 of file 0v2
+                  is => 'rw',
+                  required => 1,
+	     );
 
 has log_y => (
 	       isa => 'Bool',
@@ -101,13 +133,20 @@ has ymax => ( # value of y coord at top of graph (linear scale)
 has ymin_log => ( # value of y coord at bottom of graph (log scale)
                   isa => 'Num', # e.g. '0v1:2,3,4; 0v2:4,7,10' -> histogram cols 2,3,4 of file 0v1, and cols 4,7,10 of file 0v2
                   is => 'rw',
-                  required => 1,
+		 required => 0,
+		 default => 0.8,
 	     );
 has ymax_log => ( # value of y coord at top of graph (log scale)
                   isa => 'Num', # e.g. '0v1:2,3,4; 0v2:4,7,10' -> histogram cols 2,3,4 of file 0v1, and cols 4,7,10 of file 0v2
                   is => 'rw',
                   required => 1,
 		);
+
+has max_yaxis_chars => (
+			isa => 'Num',
+			is => 'rw',
+			required => 1,
+			);
 
 has vline_position => (
 		       isa => 'Maybe[Num]',
