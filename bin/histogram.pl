@@ -20,8 +20,6 @@ BEGIN {     # this has to go in Begin block so happens at compile time
 use lib $libdir;
 
 use Histograms;
-#use Plot_params;
-#use GD_plot;
 
 {				      # main
   unlink glob ".gnuplot*.stderr.log"; # to avoid accumulation of log files.
@@ -132,35 +130,7 @@ use Histograms;
 
   $ymax_log = $y_plot_factor_log*$histograms_obj->max_bin_y();
   $ymax = $y_plot_factor*$histograms_obj->max_bin_y();
-  # my $plot_params = Plot_params->new(
-  # 				     output_filename => $output_filename,
-  # 				     persist => $persist,
-  # 				     terminal => $terminal,
-  # 				     width => $plot_width,
-  # 				     height => $plot_height,
-  # 				     line_width => $line_width,
-  # 				     histogram_color => $histogram_color,
-  # 				     plot_title => $plot_title,
-  # 				     x_axis_label => $x_axis_label,
-  # 				     y_axis_label => $y_axis_label,
-  # 				     key_horiz_position => $key_horiz_position,
-  # 				     key_vert_position => $key_vert_position,
 
-  # 				     xmin => $histograms_obj->lo_limit(),
-  # 				     xmax => $histograms_obj->hi_limit(),
-
-  # 				     log_y => $log_y,
-  # 				     ymin => $ymin, ymax => $ymax,
-  # 				     ymin_log => $ymin_log, ymax_log => $ymax_log,
-
-  # 				     max_yaxis_chars => length int($histograms_obj->max_bin_y()),
-
-  # 				     vline_position => $vline_position,
-  # 				    );
-  #print "# line width: ", $plot_params->line_width(), "\n"; # sleep(4);
-
-  # $key_horiz_position = 'center' if($key_horiz_position eq 'middle');
-  # $key_vert_position = 'center' if($key_vert_position eq 'middle');
   if (lc $graphics eq 'gnuplot') { # Use gnuplot
     # if (0) {			   # old way
     #   use Graphics::GnuplotIF qw(GnuplotIF);
