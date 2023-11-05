@@ -79,19 +79,19 @@ has key_vert_position => (
 			   default => 'top',
 			  );
 
-has xmin => (
-	     isa => 'Maybe[Num]',
-	     is => 'rw',
-	     required => 0,
-	     default => undef,
-	    );
+# has xmin => (
+# 	     isa => 'Maybe[Num]',
+# 	     is => 'rw',
+# 	     required => 0,
+# 	     default => undef,
+# 	    );
 
-has xmax => (
-	     isa => 'Maybe[Num]',
-	     is => 'rw',
-	     required => 0,
-	     default => undef,
-	    );
+# has xmax => (
+# 	     isa => 'Maybe[Num]',
+# 	     is => 'rw',
+# 	     required => 0,
+# 	     default => undef,
+# 	    );
 
 has ymin => (
 	     isa => 'Maybe[Num]',
@@ -165,6 +165,12 @@ has colors => (
 	       # },
 	      );
 
+has output_filename => (
+			isa => 'Str',
+			is => 'rw',
+			required => 0,
+			default => 'histogram.png',
+		       );
 
 sub BUILD{
   my $self = shift;
@@ -176,8 +182,8 @@ sub BUILD{
   # my $ymax = $self->ymax;
 
   my $bin_width = $self->histograms->binwidth;
-  my $xmin = $self->xmin;	# histograms->lo_limit;
-  my $xmax = $self->xmax;	# histograms->hi_limit;
+  my $xmin = $self->histograms->lo_limit;
+  my $xmax = $self->histograms->hi_limit;
 
   # $self->xmin($xmin);
   # $self->xmax($xmax);
@@ -303,7 +309,7 @@ sub draw_histograms{
   my $histograms_obj = $self->histograms;
   my $image = $self->image();
 
-  my ($xmin, $xmax) = ($self->xmin, $self->xmax);
+  my ($xmin, $xmax) = ($histograms_obj->lo_limit, $histograms_obj->hi_limit);
   my ($ymin, $ymax) = ($self->ymin, $self->ymax);
   my $frame_L_pix = $self->frame_L_pix;
   my $frame_R_pix = $self->frame_R_pix;
@@ -399,7 +405,8 @@ sub draw_vline{
 sub x_pix{
   my $self = shift;
   my $x = shift;
-  my $x_pix = $self->frame_L_pix + ($x-$self->xmin())/($self->xmax() - $self->xmin()) * ($self->frame_R_pix() - $self->frame_L_pix());
+  my ($xmin, $xmax) = ($self->histograms->lo_limit, $self->histograms->hi_limit);
+  my $x_pix = $self->frame_L_pix + ($x-$xmin)/($xmax - $xmin) * ($self->frame_R_pix() - $self->frame_L_pix());
   return $x_pix;
 }
 
