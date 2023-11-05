@@ -27,14 +27,14 @@ has width => (
 	      isa => 'Int',
 	      is => 'rw',
 	      required => 0,
-	      default => 1,
+	      default => 640,
 	     );
 
 has height => (
 	       isa => 'Int',
 	       is => 'rw',
 	       required => 0,
-	       default => 1,
+	       default => 480,
 	      );
 
 has frame_L_pix => (
@@ -70,6 +70,13 @@ has key_horiz_position => (
 			   is => 'rw',
 			   required => 0,
 			   default => 'center',
+			  );
+
+has key_vert_position => (
+			   isa => 'Str',
+			   is => 'rw',
+			   required => 0,
+			   default => 'top',
 			  );
 
 has xmin => (
@@ -310,13 +317,13 @@ sub draw_histograms{
   my @histogram_colors = ('black', 'blue', 'green', 'red');
 
   my $h_label_x_fraction = 0.1; # default histogram label horiz position is 'left'
-  if ($self->key_horiz_position eq 'middle'  or  $self->key_horiz_position eq 'center') {
+  if ($self->key_horiz_position eq 'center') {
     $h_label_x_fraction = 0.35;
   } elsif ($self->key_horiz_position eq 'right') {
     $h_label_x_fraction = 0.6;
   }
   my $label_x_pix = (1.0 - $h_label_x_fraction)*$frame_L_pix + $h_label_x_fraction*$frame_R_pix;
-
+  my $label_y_pix = 0.94*$frame_T_pix + 0.06*$frame_B_pix;
   ##########################
   ##  draw the histogram  ##
   ##########################
@@ -359,10 +366,10 @@ sub draw_histograms{
       $image->unclosedPolygon($hline, $self->colors->{$color_name});
       # my $label = $hdata_obj->label();
       if (defined $hdata_obj->label()  and  length $hdata_obj->label() > 0) {
-	my $label_y_pix = 0.94*$frame_T_pix + 0.06*$frame_B_pix + $histogram_index*$self->char_height;
 	$image->line($label_x_pix - 25, $label_y_pix + 0.5*$self->char_height, $label_x_pix - 5, $label_y_pix + 0.5*$self->char_height, $ self->colors->{$color_name});
 	$image->string(gdLargeFont, $label_x_pix, $label_y_pix, $hdata_obj->label(), $self->colors->{black});
-      }
+	 $label_y_pix += $self->char_height;
+       }
     }
   }				# end loop over histograms
   return $self;
