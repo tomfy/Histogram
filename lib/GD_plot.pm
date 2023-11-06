@@ -2,7 +2,7 @@ package GD_plot;
 use strict;
 use warnings;
 use Moose;
-# use Mouse;
+#use Mouse;
 use namespace::autoclean;
 use Carp;
 use Scalar::Util qw (looks_like_number );
@@ -10,11 +10,10 @@ use List::Util qw ( min max sum );
 use POSIX qw ( floor ceil );
 use GD;
 
-has histograms => (
-		   isa => 'Object',
-		   is => 'rw',
-		   required => 1,
-		  );
+extends 'Plot';
+
+my $y_plot_factor = 1.08;
+my $y_plot_factor_log = 1.5;
 
 has image => (
 	      isa => 'Maybe[Object]',
@@ -22,20 +21,6 @@ has image => (
 	      required => 0,
 	      default => undef,
 	     );
-
-has width => (
-	      isa => 'Int',
-	      is => 'rw',
-	      required => 0,
-	      default => 640,
-	     );
-
-has height => (
-	       isa => 'Int',
-	       is => 'rw',
-	       required => 0,
-	       default => 480,
-	      );
 
 has frame_L_pix => (
 		    isa => 'Maybe[Num]',
@@ -65,62 +50,6 @@ has frame_T_pix => (
 		    default => undef,
 		   );
 
-has key_horiz_position => (
-			   isa => 'Str',
-			   is => 'rw',
-			   required => 0,
-			   default => 'center',
-			  );
-
-has key_vert_position => (
-			   isa => 'Str',
-			   is => 'rw',
-			   required => 0,
-			   default => 'top',
-			  );
-
-# has xmin => (
-# 	     isa => 'Maybe[Num]',
-# 	     is => 'rw',
-# 	     required => 0,
-# 	     default => undef,
-# 	    );
-
-# has xmax => (
-# 	     isa => 'Maybe[Num]',
-# 	     is => 'rw',
-# 	     required => 0,
-# 	     default => undef,
-# 	    );
-
-has ymin => (
-	     isa => 'Maybe[Num]',
-	     is => 'rw',
-	     required => 0,
-	     default => undef,
-	    );
-
-has ymax => (
-	     isa => 'Maybe[Num]',
-	     is => 'rw',
-	     required => 0,
-	     default => undef,
-	    );
-
-has line_width => (
-		   isa => 'Num',
-		   is => 'rw',
-		   required => 0,
-		   default => 1,
-		  );
-
-has relative_frame_thickness => ( # thickness of line framing the plot relative to histogram linewidth
-				 isa => 'Num',
-				 is => 'rw',
-				 required => 0,
-				 default => 1.5,
-				);
-
 has char_width => (
 		   isa => 'Num',
 		   is => 'ro',
@@ -132,20 +61,6 @@ has char_height => (
 		    is => 'ro',
 		    default => 16,
 		   );
-
-has x_axis_label => (
-		     isa => 'Maybe[Str]',
-		     is => 'rw',
-		     required => 0,
-		     default => undef,
-		    );
-
-has y_axis_label => (
-		     isa => 'Maybe[Str]',
-		     is => 'rw',
-		     required => 0,
-		     default => undef,
-		    );
 
 has color => (
 	      isa => 'Maybe[Str]',
@@ -174,34 +89,20 @@ has output_filename => (
 
 sub BUILD{
   my $self = shift;
-  #  my $params = shift;
-  #  $self->parameters($params);
-  #  my $histograms_obj = shift;
-  #my $params = $self->parameters;
-  # my $ymin = $self>ymin;
-  # my $ymax = $self->ymax;
 
   my $bin_width = $self->histograms->binwidth;
   my $xmin = $self->histograms->lo_limit;
   my $xmax = $self->histograms->hi_limit;
-
-  # $self->xmin($xmin);
-  # $self->xmax($xmax);
-  # $self->ymin($ymin);
-  # $self->ymax($ymax);
-
+  
   my $char_width = 8;
   my $char_height = 16;
 
-  # my $width = $params->width;
-  # my $height = $params->height;
   my $margin = 28;		# margin width (in pixels)
   my $tick_length_pix = 6;
   my $max_y_axis_chars = length int($self->histograms->max_bin_y);
   my $x_axis_label_space = 3*$tick_length_pix + 2.5*$char_height;
   my $y_axis_label_space = 3*$tick_length_pix + (0.5 + $max_y_axis_chars)*$char_width + ((defined $self->y_axis_label)? 2*$char_height : 0);
 
-  
   my $frame_L_pix = $margin + $y_axis_label_space;
   my $frame_R_pix = $self->width() - $margin;
   my $frame_T_pix = $margin;
@@ -227,7 +128,6 @@ sub BUILD{
 
   #my $black = $image->colorAllocate(0, 0, 0);
 
-  # my $frame_line_thickness = $relative_frame_thickness*$line_width;
   my $frame_line_thickness = $self->relative_frame_thickness()*$self->line_width;
   $image->setThickness($frame_line_thickness);
   my $frame = GD::Polygon->new();
@@ -400,6 +300,165 @@ sub draw_vline{
     my $xpix = $self->x_pix($vline_position); #, $self->xmin, $self->xmax, $self->frame_L_pix, $self->frame_R_pix);
     $image->line($xpix, $self->frame_B_pix(), $xpix, $self->frame_T_pix(), gdStyled);
   }
+}
+
+sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4 or xmax:0.2;ymax:2000q
+  my $self = shift;
+  my $histograms_obj = $self->histograms;
+  #my $gnuplotIF = $self->gnuplotIF; # $gnuplot_plot instance of Graphics::GnuplotIF
+  my $image = $self->image;
+  my $commands_string = shift;
+  #  my $plot = $the_plot_params->plot_obj();
+  #my $log_y = $self->log_y();
+  my $ymin = $self->ymin();
+  my $ymax = $self->ymax();
+  #my $ymin_log = $self->ymin_log();
+  #my $ymax_log = $self->ymax_log();
+  my $line_width = $self->line_width();
+
+  $commands_string =~ s/\s+$//g; # delete whitespace
+  return 1 if($commands_string eq 'q');
+  my @cmds = split(';', $commands_string);
+  my ($cmd, $param) = (undef, undef);
+
+  for my $cmd_param (@cmds) {
+    if ($cmd_param =~ /^([^:]+):(.+)/) {
+      ($cmd, $param) = ($1, $2);
+      $param =~ s/\s+//g if(! $cmd =~ /^\s*xlabel\s*$/);
+      print STDERR "cmd: [$cmd]  param: [$param]\n";
+    } elsif ($cmd_param =~ /^(\S+)/) {
+      $cmd = $1;
+    }
+    $cmd =~ s/\s+//g;
+
+    if (defined $cmd) {
+      # $commands_string =~ s/\s+//g if($cmd ne 'xlabel');
+      if ($cmd eq 'g') {
+	print STDERR "Command g (grid) not implemented for GD graphics.\n";
+	#$gnuplotIF->gnuplot_cmd('set grid');
+      } elsif ($cmd eq 'll') {
+	print STDERR "Command ll (toggle between linear/log scales) not implemented for GD graphics.\n";
+	# if ($log_y) {		# was log scale; go to linear scale
+	#   $self->log_y(0);
+	#   $gnuplotIF->gnuplot_cmd('unset log');
+	#   $gnuplotIF->gnuplot_set_yrange($ymin, $ymax);
+	# } else {		# was linear scale; go to log scale
+	#   $self->log_y(1);
+	#   $gnuplotIF->gnuplot_cmd('set log y');
+	#   print STDERR "ll max_bin_y: ", $histograms_obj->max_bin_y(), " y_plot_factor: $y_plot_factor \n";
+	#   print STDERR "ll $ymin $ymax\n";
+	#   print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
+	#   $gnuplotIF->gnuplot_set_yrange($ymin_log, $ymax_log);
+	# }
+      } elsif ($cmd eq 'ymax') {
+	#if (!$log_y) {
+	  $ymax = $param;
+	  #$gnuplotIF->gnuplot_set_yrange($ymin, $ymax);
+	  $self->ymax($ymax);
+	#} else {
+	#  $ymax_log = $param;
+	#  $gnuplotIF->gnuplot_set_yrange($ymin_log, $ymax_log);
+	#}
+      } elsif ($cmd eq 'ymin') {
+	#if (!$log_y) {
+	$ymin = $param;
+	$self->ymin($ymin);
+	  # print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
+	  # $gnuplotIF->gnuplot_set_yrange($ymin, $ymax);
+	  # $self->ymin($ymin);
+	# } else {
+	#   $ymin_log = $param;
+	#   $gnuplotIF->gnuplot_set_yrange($ymin_log, $ymax_log);
+	#   # $self->ymin_log($ymin_log);
+	# }
+      } elsif ($cmd eq 'key') { # move the key (options are left, center, right, top, bottom)
+	my $new_key_position = $param // 'left'; #
+	$new_key_position =~ s/,/ /; # so can use e.g. left,bottom to move both horiz. vert. at once
+	# $gnuplotIF->gnuplot_cmd("set key $new_key_position");
+	if($new_key_position eq 'top'  or  $new_key_position eq 'bottom'){
+	  $self->key_vert_position($new_key_position);
+	}else{
+	  $self->key_horiz_position($new_key_position);
+	}
+      } elsif ($cmd eq 'xlabel') {
+	$param =~ s/^\s+//;
+	$param =~ s/\s+$//;
+	$param =~ s/^([^'])/'$1/;
+	$param =~ s/([^']\s*)$/$1'/;
+	print STDERR "param: $param \n";
+	#$gnuplotIF->gnuplot_cmd("set xlabel $param");
+	$self->x_axis_label($param);
+      } elsif ($cmd eq 'export') {
+	
+	$param =~ s/'//g; # the name of the file to export to; the format will be png, and '.png' will be added to filename
+
+	#$gnuplotIF->gnuplot_hardcopy($param, " png linewidth $line_width");
+	# plot_the_plot_gnuplot($histograms_obj, $gnuplotIF, $vline_position);
+	$self->draw_histograms();
+	$self->draw_vline();
+	open my $fhout, ">", $param;
+	binmode $fhout;
+	print $fhout $self->image->png;
+	close $fhout;
+	
+	#$gnuplotIF->gnuplot_restore_terminal();
+      } elsif ($cmd eq 'off') {
+	$histograms_obj->histograms_to_plot()->[$param-1] = 0;
+      } elsif ($cmd eq 'on') {
+	$histograms_obj->histograms_to_plot()->[$param-1] = 1;
+      } elsif ($cmd eq 'cmd') {
+	print STDERR "Command 'cmd' not implemented for GD graphics.\n";
+	# if ($param =~ /^\s*['](.+)[']\s*$/) { # remove surrounding single quotes if present
+	#   $param = $1;
+	# }
+	# $gnuplotIF->gnuplot_cmd("$param");
+      } else {		      # these commands require bin_data, etc. 
+	if ($cmd eq 'x') {    # expand (or contract) x range.
+	  $histograms_obj->expand_range($param);
+	} elsif ($cmd eq 'bw') { # set the bin width
+	  $histograms_obj->set_binwidth($param);
+	} elsif ($cmd eq 'lo' or $cmd eq 'low' or $cmd eq 'xmin') { # change low x-scale limit
+	  $histograms_obj->change_range($param, undef);
+	} elsif ($cmd eq 'hi' or $cmd eq 'xmax') { # change high x-scale limit
+	  $histograms_obj->change_range(undef, $param);
+	} elsif ($cmd eq 'c') {	# coarsen bins
+	  $histograms_obj->change_binwidth($param);
+	} elsif ($cmd eq 'r') {	# refine bins
+	  $histograms_obj->change_binwidth($param? -1*$param : -1);
+	}else{
+	  print "Command $cmd is unknown. Command is ignored.\n";
+	  return 0;
+	}
+      	$histograms_obj->bin_data();
+	$ymax = $histograms_obj->max_bin_y()*$y_plot_factor;
+	#$ymax_log = $histograms_obj->max_bin_y()*$y_plot_factor_log;
+	$self->ymax($ymax);
+	# if ($log_y) {
+	#   $gnuplotIF->gnuplot_set_yrange($ymin_log, $ymax_log);
+	# } else {
+	#   $gnuplotIF->gnuplot_set_yrange($ymin, $ymax);
+	# }
+      }
+
+      print STDERR "max_bin_y: ", $histograms_obj->max_bin_y(), " y_plot_factor: $y_plot_factor \n";
+      #plot_the_plot_gnuplot($histograms_obj, $gnuplotIF, $vline_position);
+      $self->draw_histograms();
+      $self->draw_vline();
+
+      print STDERR "Printing png output to file ", $self->output_filename, "\n";
+        unlink $self->output_filename;
+	open my $fhout, ">", $self->output_filename;
+	binmode $fhout;
+	print $fhout $self->image->png;
+      close $fhout;
+
+      # $self->ymin($ymin);
+      # $self->ymin_log($ymin_log);
+      # $self->ymax($ymax);
+      # $self->ymax_log($ymax_log);
+    }
+  }
+  return 0;
 }
 
 sub x_pix{

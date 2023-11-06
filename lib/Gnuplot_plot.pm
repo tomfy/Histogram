@@ -2,7 +2,7 @@ package Gnuplot_plot;
 use strict;
 use warnings;
 use Moose;
-# use Mouse;
+#use Mouse;
 use namespace::autoclean;
 use Carp;
 use Scalar::Util qw (looks_like_number );
@@ -10,14 +10,10 @@ use List::Util qw ( min max sum );
 use POSIX qw ( floor ceil );
 use Graphics::GnuplotIF qw(GnuplotIF);
 
+extends 'Plot';
+
 my $y_plot_factor = 1.08;
 my $y_plot_factor_log = 1.5;
-
-has histograms => (
-		   isa => 'Object',
-		   is => 'rw',
-		   required => 1,
-		  );
 
 has gnuplotIF => ( # this is the object constructed with Graphics::GnuplotIF->new(...
 		  isa => 'Maybe[Object]',
@@ -39,183 +35,6 @@ has terminal => (
 		 required => 0,
 		 default => 'x11',
 		);
-
-has width => (
-	      isa => 'Int',
-	      is => 'rw',
-	      required => 0,
-	      default => 640,
-	     );
-
-has height => (
-	       isa => 'Int',
-	       is => 'rw',
-	       required => 0,
-	       default => 480,
-	      );
-
-# has frame_L_pix => (
-# 		    isa => 'Maybe[Num]',
-# 		    is => 'rw',
-# 		    required => 0,
-# 		    default => undef,
-# 		   );
-
-# has frame_R_pix => (
-# 		    isa => 'Maybe[Num]',
-# 		    is => 'rw',
-# 		    required => 0,
-# 		    default => undef,
-# 		   );
-
-# has frame_B_pix => (
-# 		    isa => 'Maybe[Num]',
-# 		    is => 'rw',
-# 		    required => 0,
-# 		    default => undef,
-# 		   );
-
-# has frame_T_pix => (
-# 		    isa => 'Maybe[Num]',
-# 		    is => 'rw',
-# 		    required => 0,
-# 		    default => undef,
-# 		   );
-
-has key_horiz_position => (
-			   isa => 'Str',
-			   is => 'rw',
-			   required => 0,
-			   default => 'center',
-			  );
-
-has key_vert_position => (
-			  isa => 'Str',
-			  is => 'rw',
-			  required => 0,
-			  default => 'top',
-			 );
-
-# has xmin => (
-# 	     isa => 'Maybe[Num]',
-# 	     is => 'rw',
-# 	     required => 0,
-# 	     default => undef,
-# 	    );
-
-# has xmax => (
-# 	     isa => 'Maybe[Num]',
-# 	     is => 'rw',
-# 	     required => 0,
-# 	     default => undef,
-# 	    );
-
-has ymin => (
-	     isa => 'Maybe[Num]',
-	     is => 'rw',
-	     required => 0,
-	     default => undef,
-	    );
-
-has ymax => (
-	     isa => 'Maybe[Num]',
-	     is => 'rw',
-	     required => 0,
-	     default => undef,
-	    );
-
-has ymin_log => (
-		 isa => 'Maybe[Num]',
-		 is => 'rw',
-		 required => 0,
-		 default => undef,
-		);
-
-has ymax_log => (
-		 isa => 'Maybe[Num]',
-		 is => 'rw',
-		 required => 0,
-		 default => undef,
-		);
-
-has line_width => (
-		   isa => 'Num',
-		   is => 'rw',
-		   required => 0,
-		   default => 1,
-		  );
-
-has relative_frame_thickness => ( # thickness of line framing the plot relative to histogram linewidth
-				 isa => 'Num',
-				 is => 'rw',
-				 required => 0,
-				 default => 1.5,
-				);
-
-has char_width => (
-		   isa => 'Num',
-		   is => 'ro',
-		   default => 8,
-		  );
-
-has char_height => (
-		    isa => 'Num',
-		    is => 'ro',
-		    default => 16,
-		   );
-
-has x_axis_label => (
-		     isa => 'Maybe[Str]',
-		     is => 'rw',
-		     required => 0,
-		     default => undef,
-		    );
-
-has y_axis_label => (
-		     isa => 'Maybe[Str]',
-		     is => 'rw',
-		     required => 0,
-		     default => undef,
-		    );
-
-has log_y => (
-	      isa => 'Bool',
-	      is => 'rw',
-	      required => 0,
-	      default => 0,
-	     );
-
-has vline_position => (
-		       isa => 'Maybe[Num]',
-		       is => 'rw',
-		       required => 0,
-		       default => undef,
-		      );
-
-# has color => (
-# 	      isa => 'Maybe[Str]',
-# 	      is => 'rw',
-# 	      required => 0,
-# 	      default => undef,
-# 	     );
-
-# has colors => (
-# 	       isa => 'Maybe[HashRef]',
-# 	       is => 'rw',
-# 	       required => 0,
-# 	       default => undef,
-# 	       # sub {
-# 	       # 	 { 'black' => [0,0,0], 'white' => [255,255,255],
-# 	       # 	   'blue' => [50,80,255], 'green' => [20,130,20], 'red' => [150,20,20] }
-# 	       # },
-# 	      );
-
-has output_filename => (
-			isa => 'Str',
-			is => 'rw',
-			required => 0,
-			default => 'histogram.png',
-		       );
 
 sub BUILD{
   my $self = shift;

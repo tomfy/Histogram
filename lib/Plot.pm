@@ -2,16 +2,12 @@ package Plot;
 use strict;
 use warnings;
 use Moose;
-# use Mouse;
+#use Mouse;
 use namespace::autoclean;
 use Carp;
 use Scalar::Util qw (looks_like_number );
 use List::Util qw ( min max sum );
 use POSIX qw ( floor ceil );
-#use GD;
-
-#my $y_plot_factor = 1.08;
-#my $y_plot_factor_log = 1.5;
 
 has histograms => (
 		   isa => 'Object',
@@ -88,18 +84,6 @@ has relative_frame_thickness => ( # thickness of line framing the plot relative 
 				 required => 0,
 				 default => 1.5,
 				);
-
-# has char_width => (
-# 		   isa => 'Num',
-# 		   is => 'ro',
-# 		   default => 8,
-# 		  );
-
-# has char_height => (
-# 		    isa => 'Num',
-# 		    is => 'ro',
-# 		    default => 16,
-# 		   );
 
 has x_axis_label => (
 		     isa => 'Maybe[Str]',
