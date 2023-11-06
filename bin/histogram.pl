@@ -153,39 +153,39 @@ use Histograms;
     # 	}
     #   }
     # } else {			# new way, using Gnuplot_plot module
-      use Gnuplot_plot;
-      my $gnuplot_plot = Gnuplot_plot->new({
-					    persist => $persist,
-					    width => $plot_width, height => $plot_height,
-					    xmin => $histograms_obj->lo_limit, xmax => $histograms_obj->hi_limit,
-					    ymin => $ymin, ymax => $ymax,
-					    ymin_log => $ymin_log, ymax_log => $ymax_log,
-					    x_axis_label => $x_axis_label,
-					    y_axis_label => $y_axis_label,
-					    line_width => $line_width,
-					    color => $histogram_color,
-					    relative_frame_thickness => $relative_frame_thickness,
-					    key_horiz_position => $key_horiz_position,
-					    key_vert_position => $key_vert_position,
-					    histograms => $histograms_obj,
-					    vline_position => $vline_position,
-					    output_filename => $output_filename,
-					   });
-      $gnuplot_plot->draw_histograms();
+    use Gnuplot_plot;
+    my $gnuplot_plot = Gnuplot_plot->new({
+					  persist => $persist,
+					  width => $plot_width, height => $plot_height,
+					  xmin => $histograms_obj->lo_limit, xmax => $histograms_obj->hi_limit,
+					  ymin => $ymin, ymax => $ymax,
+					  ymin_log => $ymin_log, ymax_log => $ymax_log,
+					  x_axis_label => $x_axis_label,
+					  y_axis_label => $y_axis_label,
+					  line_width => $line_width,
+					  color => $histogram_color,
+					  relative_frame_thickness => $relative_frame_thickness,
+					  key_horiz_position => $key_horiz_position,
+					  key_vert_position => $key_vert_position,
+					  histograms => $histograms_obj,
+					  vline_position => $vline_position,
+					  output_filename => $output_filename,
+					 });
+    $gnuplot_plot->draw_histograms();
 
-        if ($interactive) {
-	#####  modify plot in response to keyboard commands: #####
-	while (1) {		# loop to handle interactive commands.
-	  my $commands_string = <STDIN>; # command and optionally a parameter, e.g. 'x:0.8'
-	  my $done = $gnuplot_plot->handle_interactive_command($commands_string);
-	  #print "done with interactive commands? $done \n";
-	  last if($done);
-	}
+    if ($interactive) {
+      #####  modify plot in response to keyboard commands: #####
+      while (1) {		# loop to handle interactive commands.
+	my $commands_string = <STDIN>; # command and optionally a parameter, e.g. 'x:0.8'
+	my $done = $gnuplot_plot->handle_interactive_command($commands_string);
+	#print "done with interactive commands? $done \n";
+	last if($done);
       }
+    }
     #}
   } elsif (lc $graphics eq 'gd') { # Use GD
     use GD_plot;
-    my $plot_gd = GD_plot->new({
+    my $gd_plot = GD_plot->new({
 				persist => $persist,
 				width => $plot_width, height => $plot_height,
 				xmin => $histograms_obj->lo_limit, xmax => $histograms_obj->hi_limit,
@@ -201,233 +201,27 @@ use Histograms;
 				vline_position => $vline_position,
 				output_filename => $output_filename,
 			       });
-    $plot_gd->draw_histograms();
-    $plot_gd->draw_vline($vline_position, 'black');
-
-    open my $fhout, ">", $plot_gd->output_filename;
+    $gd_plot->draw_histograms();
+    $gd_plot->draw_vline($vline_position, 'black');
+    print STDERR "unlink output_filename : ", $gd_plot->output_filename, "\n";
+    unlink $gd_plot->output_filename;
+    print STDERR "open output_filename : ", $gd_plot->output_filename, "\n";
+    open my $fhout, ">", $gd_plot->output_filename;
     binmode $fhout;
-    print $fhout $plot_gd->image->png;
+    print $fhout $gd_plot->image->png;
     close $fhout;
-  } else {
-    die "Graphics option $graphics is unknown. Accepted options are 'gnuplot' and 'gd'\n";
-  }
-  print "Exiting histogram.pl\n";
-}				# end of main
-###########
 
-
-# #####  gnuplot specific subroutines  #####
-
-# sub create_gnuplot_plot{
-#   my $plot_params = shift;
-#   my $other_gnuplot_command = shift // undef;
-
-#   # construct Graphics::GnuplotIF object and set various parameters;
-#   # terminal, linewidth, plot size, x, y, labels, yrange,
-#   # frame thickness, tick marks
-  
-#   my $gnuplot_plot = Graphics::GnuplotIF->new( persist => $plot_params->persist(), style => 'histeps');
-#   my $terminal_command = "set terminal " . $plot_params->terminal() . " noenhanced " .
-#     " linewidth " . $plot_params->line_width() .
-#     " size " . $plot_params->width() . ", " .  $plot_params->height();
-#   $gnuplot_plot->gnuplot_cmd($terminal_command);
-#   my ($x_axis_label, $y_axis_label) = ($plot_params->x_axis_label(), $plot_params->y_axis_label());
-#   $gnuplot_plot->gnuplot_set_xlabel($x_axis_label) if(defined $x_axis_label);
-#   $gnuplot_plot->gnuplot_set_ylabel($y_axis_label) if(defined $y_axis_label);
-
-#   if ($plot_params->log_y()) {
-#     $gnuplot_plot->gnuplot_cmd('set log y');
-#     my $ymax_log = $plot_params->ymax_log();
-#     $gnuplot_plot->gnuplot_set_yrange($plot_params->ymin_log(), $ymax_log // '*');
-#   } else {
-#     my $ymax = $plot_params->ymax();
-#     $gnuplot_plot->gnuplot_set_yrange($plot_params->ymin(), $ymax // '*');
-#   }
-
-#   my $key_pos_cmd = 'set key ' . $plot_params->key_horiz_position() . " " .  $plot_params->key_vert_position();
-#   $gnuplot_plot->gnuplot_cmd($key_pos_cmd);
-#   $gnuplot_plot->gnuplot_cmd("set border lw " . $plot_params->relative_frame_thickness());
-#   $gnuplot_plot->gnuplot_cmd('set mxtics');
-#   $gnuplot_plot->gnuplot_cmd('set tics out');
-#   $gnuplot_plot->gnuplot_cmd('set tics scale 2,1');
-#   $gnuplot_plot->gnuplot_cmd($other_gnuplot_command) if(defined $other_gnuplot_command);
-
-#   return $gnuplot_plot;
-# }
-
-# sub plot_the_plot_gnuplot{
-#   my $histograms_obj = shift;
-#   my $gnuplot_plot_obj = shift;
-#   my $vline_position = shift;
-#   # print STDERR "vline pos: $vline_position \n"; sleep(2);
-
-#   $gnuplot_plot_obj->gnuplot_set_xrange($histograms_obj->lo_limit(), $histograms_obj->hi_limit());
-#   my $bin_centers = $histograms_obj->filecol_hdata()->{pooled}->bin_centers();
-#   my @plot_titles = ();
-
-#   my @histo_bin_counts = ();
-#   while (my ($i_histogram, $plt) = each @{$histograms_obj->histograms_to_plot()} ) {
-#     if ($plt == 1) {
-#       print STDERR "adding histogram w index $i_histogram.\n";
-#       my $fcspec = $histograms_obj->filecol_specifiers()->[$i_histogram];
-#       my $hdata_obj = $histograms_obj->filecol_hdata()->{$fcspec};
-#       my $bincounts = $hdata_obj->bin_counts();
-#       push @plot_titles, $hdata_obj->label();
-#       push @histo_bin_counts, $bincounts; # push an array ref holding the bin counts ...
-#     }
-#   }
-#   if (defined $vline_position) {
-#     draw_vline_gnuplot($gnuplot_plot_obj, $vline_position); #, $ymin, $ymax);
-#   }
-#   $gnuplot_plot_obj->gnuplot_set_plot_titles(@plot_titles);
-#   $gnuplot_plot_obj->gnuplot_plot_xy($bin_centers, @histo_bin_counts);
-# }
-
-# sub draw_vline_gnuplot{
-#   my $the_plot = shift;
-#   my $x_pos = shift;
-#   $the_plot->gnuplot_cmd("unset arrow");
-#   $the_plot->gnuplot_cmd("set arrow nohead from $x_pos, graph 0 to $x_pos, graph 1 lw 1 dt 2") if(defined $x_pos);
-# }
-
-# sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4 or xmax:0.2;ymax:2000q
-#   my $histograms_obj = shift;
-#   my $the_plot_params = shift;	# instance of Plot_params
-#   # my $plot_params = shift; # Plot_params->new( log_y => $log_y, ymin => $ymin, ymax => $ymax, ymin_log => $ymin_log, ymax_log => $ymax_log,
-#   # 			    vline_position => $vline_position, line_width => $line_width);
-#   my $the_gnuplot = shift; # $gnuplot_plot instance of Graphics::GnuplotIF
-#   my $commands_string = shift;
-#   #  my $plot = $the_plot_params->plot_obj();
-#   my $log_y = $the_plot_params->log_y();
-#   my $ymin = $the_plot_params->ymin();
-#   my $ymax = $the_plot_params->ymax();
-#   my $ymin_log = $the_plot_params->ymin_log();
-#   my $ymax_log = $the_plot_params->ymax_log();
-#   my $vline_position = $the_plot_params->vline_position(); # 
-#   my $line_width = $the_plot_params->line_width();
-
-#   $commands_string =~ s/\s+$//g; # delete whitespace
-#   return 1 if($commands_string eq 'q');
-#   my @cmds = split(';', $commands_string);
-#   my ($cmd, $param) = (undef, undef);
-
-#   for my $cmd_param (@cmds) {
-#     if ($cmd_param =~ /^([^:]+):(.+)/) {
-#       ($cmd, $param) = ($1, $2);
-#       $param =~ s/\s+//g if(! $cmd =~ /^\s*xlabel\s*$/);
-#       print STDERR "cmd: [$cmd]  param: [$param]\n";
-#     } elsif ($cmd_param =~ /^(\S+)/) {
-#       $cmd = $1;
-#     }
-#     $cmd =~ s/\s+//g;
-
-#     if (defined $cmd) {
-#       # $commands_string =~ s/\s+//g if($cmd ne 'xlabel');
-#       if ($cmd eq 'g') {
-# 	$the_gnuplot->gnuplot_cmd('set grid');
-#       } elsif ($cmd eq 'll') {
-# 	if ($log_y) {
-# 	  $the_plot_params->log_y(0);
-# 	  $the_gnuplot->gnuplot_cmd('unset log');
-# 	  $the_gnuplot->gnuplot_set_yrange($ymin, $ymax);
-# 	} else {
-# 	  $the_plot_params->log_y(1);
-# 	  $the_gnuplot->gnuplot_cmd('set log y');
-# 	  print STDERR "ll max_bin_y: ", $histograms_obj->max_bin_y(), " y_plot_factor: $y_plot_factor \n";
-# 	  print STDERR "ll $ymin $ymax\n";
-# 	  print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
-# 	  $the_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
-# 	}
-#       } elsif ($cmd eq 'ymax') {
-# 	if (!$log_y) {
-# 	  $ymax = $param;
-# 	  $the_gnuplot->gnuplot_set_yrange($ymin, $ymax);
-# 	} else {
-# 	  $ymax_log = $param;
-# 	  $the_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
-# 	}
-#       } elsif ($cmd eq 'ymin') {
-# 	if (!$log_y) {
-# 	  $ymin = $param;
-# 	  print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
-# 	  $the_gnuplot->gnuplot_set_yrange($ymin, $ymax);
-# 	  # $the_plot_params->ymin($ymin);
-# 	} else {
-# 	  $ymin_log = $param;
-# 	  $the_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
-# 	  # $the_plot_params->ymin_log($ymin_log);
-# 	}
-#       } elsif ($cmd eq 'x') {	# expand (or contract) x range.
-# 	$histograms_obj->expand_range($param);
-# 	$histograms_obj->bin_data();
-#       } elsif ($cmd eq 'bw') {	# set the bin width
-# 	$histograms_obj->set_binwidth($param);
-# 	$histograms_obj->bin_data();
-#       } elsif ($cmd eq 'lo' or $cmd eq 'low' or $cmd eq 'xmin') { # change low x-scale limit
-# 	$histograms_obj->change_range($param, undef);
-# 	$histograms_obj->bin_data();
-#       } elsif ($cmd eq 'hi' or $cmd eq 'xmax') { # change high x-scale limit
-# 	$histograms_obj->change_range(undef, $param);
-# 	$histograms_obj->bin_data();
-#       } elsif ($cmd eq 'c') {	# coarsen bins
-# 	$histograms_obj->change_binwidth($param);
-# 	$histograms_obj->bin_data();
-# 	$ymax = $histograms_obj->max_bin_y()*$y_plot_factor;
-# 	# $the_plot_params->ymax($ymax);
-# 	$ymax_log = $histograms_obj->max_bin_y()*$y_plot_factor_log;
-# 	# $the_plot_params->ymax_log($ymax_log);
-# 	if ($log_y) {
-# 	  $the_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
-# 	} else {
-# 	  $the_gnuplot->gnuplot_set_yrange($ymin, $ymax);
-# 	}
-#       } elsif ($cmd eq 'r') {	# refine bins
-# 	$histograms_obj->change_binwidth($param? -1*$param : -1);
-# 	$histograms_obj->bin_data();
-# 	$ymax = $histograms_obj->max_bin_y()*$y_plot_factor;
-# 	# $the_plot_params->ymax($ymax);
-# 	$ymax_log = $histograms_obj->max_bin_y()*$y_plot_factor_log;
-# 	# $the_plot_params->ymax_log($ymax_log);
-# 	if ($log_y) {
-# 	  $the_gnuplot->gnuplot_set_yrange($ymin_log, $ymax_log);
-# 	} else {
-# 	  $the_gnuplot->gnuplot_set_yrange($ymin, $ymax);
-# 	}
-#       } elsif ($cmd eq 'key') { # move the key (options are left, right, top, bottom)
-# 	my $new_key_position = $param // 'left'; #
-# 	$new_key_position =~ s/,/ /; # so can use e.g. left,bottom to move both horiz. vert. at once
-# 	$the_gnuplot->gnuplot_cmd("set key $new_key_position");
-#       } elsif ($cmd eq 'xlabel') {
-# 	$param =~ s/^\s+//;
-# 	$param =~ s/\s+$//;
-# 	$param =~ s/^([^'])/'$1/;
-# 	$param =~ s/([^']\s*)$/$1'/;
-# 	print STDERR "param: $param \n";
-# 	$the_gnuplot->gnuplot_cmd("set xlabel $param");
-#       } elsif ($cmd eq 'export') {
-# 	$param =~ s/'//g; # the name of the file to export to; the format will be png, and '.png' will be added to filename
-
-# 	$the_gnuplot->gnuplot_hardcopy($param, " png linewidth $line_width");
-# 	plot_the_plot_gnuplot($histograms_obj, $the_gnuplot, $vline_position);
-# 	$the_gnuplot->gnuplot_restore_terminal();
-#       } elsif ($cmd eq 'off') {
-# 	$histograms_obj->histograms_to_plot()->[$param-1] = 0;
-#       } elsif ($cmd eq 'on') {
-# 	$histograms_obj->histograms_to_plot()->[$param-1] = 1;
-#       } elsif ($cmd eq 'cmd') {
-# 	if ($param =~ /^\s*['](.+)[']\s*$/) { # remove surrounding single quotes if present
-# 	  $param = $1;
-# 	}
-# 	$the_gnuplot->gnuplot_cmd("$param");
-#       }
-#       print STDERR "max_bin_y: ", $histograms_obj->max_bin_y(), " y_plot_factor: $y_plot_factor \n";
-#       plot_the_plot_gnuplot($histograms_obj, $the_gnuplot, $vline_position);
-
-#       $the_plot_params->ymin($ymin);
-#       $the_plot_params->ymin_log($ymin_log);
-#       $the_plot_params->ymax($ymax);
-#       $the_plot_params->ymax_log($ymax_log);
-#     }
-#   }
-#   return 0;
-# }
+    if ($interactive) {
+      #####  modify plot in response to keyboard commands: #####
+      while (1) {		# loop to handle interactive commands.
+	my $commands_string = <STDIN>; # command and optionally a parameter, e.g. 'x:0.8'
+	my $done = $gd_plot->handle_interactive_command($commands_string);
+	last if($done);
+      }
+    }
+    } else {
+      die "Graphics option $graphics is unknown. Accepted options are 'gnuplot' and 'gd'\n";
+    }
+    print "Exiting histogram.pl\n";
+  }				# end of main
+  ###########
