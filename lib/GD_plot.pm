@@ -89,6 +89,11 @@ has output_filename => (
 
 sub BUILD{
   my $self = shift;
+  $self->initialize_image();
+}
+
+sub initialize_image{
+  my $self = shift;
 
   my $bin_width = $self->histograms->binwidth;
   my $xmin = $self->histograms->lo_limit;
@@ -111,7 +116,7 @@ sub BUILD{
   $self->frame_R_pix($frame_R_pix);
   $self->frame_B_pix($frame_B_pix);
   $self->frame_T_pix($frame_T_pix);
-
+  
   #####  construct the image
   my $image = GD::Image->new($self->width(), $self->height());
   $self->colors({black => $image->colorAllocate(0, 0, 0),
@@ -121,12 +126,16 @@ sub BUILD{
 		 red => $image->colorAllocate(150,20,20)}
 	       );
   my $black = $self->colors->{black};
-  my @histogram_colors = ('black', 'blue', 'green', 'red');
-
   my $white = $self->colors->{white};
+  my @histogram_colors = ('black', 'blue', 'green', 'red');
   $image->filledRectangle(0, 0, $self->width-1, $self->height-1, $white);
 
-  #my $black = $image->colorAllocate(0, 0, 0);
+  # my $xmin = $self->histograms->lo_limit;
+  # my $xmax = $self->histograms->hi_limit;
+  # my $frame_L_pix = $self->frame_L_pix;
+  # my $frame_R_pix = $self->frame_R_pix;
+  # my $frame_B_pix = $self->frame_B_pix;
+  # my $frame_T_pix = $self->frame_T_pix;
 
   my $frame_line_thickness = $self->relative_frame_thickness()*$self->line_width;
   $image->setThickness($frame_line_thickness);
@@ -274,8 +283,8 @@ sub draw_histograms{
       if (defined $hdata_obj->label()  and  length $hdata_obj->label() > 0) {
 	$image->line($label_x_pix - 25, $label_y_pix + 0.5*$self->char_height, $label_x_pix - 5, $label_y_pix + 0.5*$self->char_height, $ self->colors->{$color_name});
 	$image->string(gdLargeFont, $label_x_pix, $label_y_pix, $hdata_obj->label(), $self->colors->{black});
-	 $label_y_pix += $self->char_height;
-       }
+	$label_y_pix += $self->char_height;
+      }
     }
   }				# end loop over histograms
   return $self;
@@ -352,9 +361,9 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
 	# }
       } elsif ($cmd eq 'ymax') {
 	#if (!$log_y) {
-	  $ymax = $param;
-	  #$gnuplotIF->gnuplot_set_yrange($ymin, $ymax);
-	  $self->ymax($ymax);
+	$ymax = $param;
+	#$gnuplotIF->gnuplot_set_yrange($ymin, $ymax);
+	$self->ymax($ymax);
 	#} else {
 	#  $ymax_log = $param;
 	#  $gnuplotIF->gnuplot_set_yrange($ymin_log, $ymax_log);
@@ -363,9 +372,9 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
 	#if (!$log_y) {
 	$ymin = $param;
 	$self->ymin($ymin);
-	  # print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
-	  # $gnuplotIF->gnuplot_set_yrange($ymin, $ymax);
-	  # $self->ymin($ymin);
+	# print "ymin,ymax,yminlog,ymaxlog: $ymin $ymax $ymin_log $ymax_log\n";
+	# $gnuplotIF->gnuplot_set_yrange($ymin, $ymax);
+	# $self->ymin($ymin);
 	# } else {
 	#   $ymin_log = $param;
 	#   $gnuplotIF->gnuplot_set_yrange($ymin_log, $ymax_log);
@@ -375,9 +384,9 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
 	my $new_key_position = $param // 'left'; #
 	$new_key_position =~ s/,/ /; # so can use e.g. left,bottom to move both horiz. vert. at once
 	# $gnuplotIF->gnuplot_cmd("set key $new_key_position");
-	if($new_key_position eq 'top'  or  $new_key_position eq 'bottom'){
+	if ($new_key_position eq 'top'  or  $new_key_position eq 'bottom') {
 	  $self->key_vert_position($new_key_position);
-	}else{
+	} else {
 	  $self->key_horiz_position($new_key_position);
 	}
       } elsif ($cmd eq 'xlabel') {
@@ -389,19 +398,15 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
 	#$gnuplotIF->gnuplot_cmd("set xlabel $param");
 	$self->x_axis_label($param);
       } elsif ($cmd eq 'export') {
-	
-	$param =~ s/'//g; # the name of the file to export to; the format will be png, and '.png' will be added to filename
-
-	#$gnuplotIF->gnuplot_hardcopy($param, " png linewidth $line_width");
-	# plot_the_plot_gnuplot($histograms_obj, $gnuplotIF, $vline_position);
+	$param =~ s/'//g;     # the name of the png file to export to.
+	my $output_file = $param;
+	$self->initialize_image();
 	$self->draw_histograms();
 	$self->draw_vline();
-	open my $fhout, ">", $param;
+	open my $fhout, ">", "$output_file";
 	binmode $fhout;
 	print $fhout $self->image->png;
 	close $fhout;
-	
-	#$gnuplotIF->gnuplot_restore_terminal();
       } elsif ($cmd eq 'off') {
 	$histograms_obj->histograms_to_plot()->[$param-1] = 0;
       } elsif ($cmd eq 'on') {
@@ -425,7 +430,7 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
 	  $histograms_obj->change_binwidth($param);
 	} elsif ($cmd eq 'r') {	# refine bins
 	  $histograms_obj->change_binwidth($param? -1*$param : -1);
-	}else{
+	} else {
 	  print "Command $cmd is unknown. Command is ignored.\n";
 	  return 0;
 	}
@@ -441,21 +446,17 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
       }
 
       print STDERR "max_bin_y: ", $histograms_obj->max_bin_y(), " y_plot_factor: $y_plot_factor \n";
-      #plot_the_plot_gnuplot($histograms_obj, $gnuplotIF, $vline_position);
+      $self->initialize_image();
       $self->draw_histograms();
       $self->draw_vline();
 
       print STDERR "Printing png output to file ", $self->output_filename, "\n";
-        unlink $self->output_filename;
-	open my $fhout, ">", $self->output_filename;
-	binmode $fhout;
-	print $fhout $self->image->png;
+      # unlink "temp.png";
+      open my $fhout, ">", $self->output_filename;
+      binmode $fhout;
+      print $fhout $self->image->png;
       close $fhout;
-
-      # $self->ymin($ymin);
-      # $self->ymin_log($ymin_log);
-      # $self->ymax($ymax);
-      # $self->ymax_log($ymax_log);
+      # rename("temp.png", $self->output_filename);
     }
   }
   return 0;

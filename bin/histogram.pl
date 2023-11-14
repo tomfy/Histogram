@@ -132,27 +132,6 @@ use Histograms;
   $ymax = $y_plot_factor*$histograms_obj->max_bin_y();
 
   if (lc $graphics eq 'gnuplot') { # Use gnuplot
-    # if (0) {			   # old way
-    #   use Graphics::GnuplotIF qw(GnuplotIF);
-    #   my $gnuplot_plot = create_gnuplot_plot($plot_params);
-    #   if ($write_to_png) {
-    # 	$gnuplot_plot->gnuplot_hardcopy($output_filename, " png $enhanced linewidth $line_width");
-    # 	$gnuplot_plot->gnuplot_cmd("set out $output_filename");
-    # 	plot_the_plot_gnuplot($histograms_obj, $gnuplot_plot, $vline_position);
-    # 	$gnuplot_plot->gnuplot_restore_terminal();
-    #   }
-    #   print "[$show_on_screen] [$terminal] [$do_plot]\n";
-    #   if ($show_on_screen) {
-    # 	plot_the_plot_gnuplot($histograms_obj, $gnuplot_plot, $vline_position) if($do_plot);
-    #   }
-    #   if ($interactive) {
-    # 	#####  modify plot in response to keyboard commands: #####
-    # 	while (1) {		# loop to handle interactive commands.
-    # 	  my $commands_string = <STDIN>; # command and optionally a parameter, e.g. 'x:0.8'
-    # 	  last if(handle_interactive_command($histograms_obj, $plot_params,  $gnuplot_plot, $commands_string));
-    # 	}
-    #   }
-    # } else {			# new way, using Gnuplot_plot module
     use Gnuplot_plot;
     my $gnuplot_plot = Gnuplot_plot->new({
 					  persist => $persist,
@@ -223,5 +202,5 @@ use Histograms;
       die "Graphics option $graphics is unknown. Accepted options are 'gnuplot' and 'gd'\n";
     }
     print "Exiting histogram.pl\n";
-  }				# end of main
-  ###########
+  }
+  ###########  end of main  ##############
