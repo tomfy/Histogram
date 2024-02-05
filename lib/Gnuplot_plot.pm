@@ -193,11 +193,13 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
 	$self->draw_histograms();
 	$self->draw_vline();
 	$gnuplotIF->gnuplot_restore_terminal();
-      } elsif ($cmd eq 'off') {
+      } elsif ($cmd eq 'off') { # turn off (don't plot) one of the histograms
 	$histograms_obj->histograms_to_plot()->[$param-1] = 0;
-      } elsif ($cmd eq 'on') {
+      } elsif ($cmd eq 'on') { 
 	$histograms_obj->histograms_to_plot()->[$param-1] = 1;
-      } elsif ($cmd eq 'cmd') {
+      }elsif ($cmd eq 'vline'){
+	$self->vline_position($param);
+      } elsif ($cmd eq 'cmd') { # execute other gnuplot commands
 	if ($param =~ /^\s*['](.+)[']\s*$/) { # remove surrounding single quotes if present
 	  $param = $1;
 	}
