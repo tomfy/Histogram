@@ -40,10 +40,9 @@ use Histograms;
   my $ymax = "*";
   my $ymax_log = "*";
   my $ymin_log = 0.8;
-  my $output_filename = 'histogram.png'; # default is to just send to screen.
-  my $show_on_screen = 1;
-  my $write_to_png = 0;
-  my $interactive = undef;
+  my $output_filename = 'histogram.png'; # default file name in non-interactive case. 
+  # my $write_to_png = 0; # not used. if gnuplot, then interactive, use export to get png; if GD not interactive, writes to png.
+  my $interactive = 1;
   my $enhanced = 0;
   my $vline_position = undef;
   my $plot_title = undef;
@@ -72,9 +71,9 @@ use Histograms;
 	     'graphics=s' => \$graphics,
 	     # whether to plot, and where (screen or file)
 	     'plot!' => \$do_plot, # -noplot to suppress plot - just see histogram as text.
-	     'screen!' => \$show_on_screen,
-	     'png!' => \$write_to_png,
-	     'interactive!' => \$interactive, # if true, plot and wait for further commands, else plot and exit
+	  #   'screen!' => \$show_on_screen,  # not implemented
+	  #   'png!' => \$write_to_png, # not used
+	  #   'interactive!' => \$interactive, # if true, plot and wait for further commands, else plot and exit
 
 	     'width=f' => \$plot_width,
 	     'height=f' => \$plot_height,
@@ -91,7 +90,7 @@ use Histograms;
 	     'vline_position=f' => \$vline_position,
 
 	     # relevant to gnuplot
-	     'terminal=s' => \$terminal, # x11, qt, etc.
+	     'terminal=s' => \$terminal, # x11, qt, at least, work.
 	     'command=s' => \$gnuplot_command,
 	     'enhanced!' => \$enhanced,
 	    );
@@ -106,9 +105,10 @@ use Histograms;
 
   $lo_limit = undef if($lo_limit eq 'auto'); # now default is 0.
 
-  if (!defined $interactive) {
-    $interactive = ($write_to_png)? 0 : 1;
-  }
+  # if (!defined $interactive) {
+  #   # $interactive = ($write_to_png)? 0 : 1;
+  #   $interactive = ($graphics eq 'gnuplot')? 1 : 0; # for now - gnuplot<->interactive, gd<->not interactive
+  # }
 
   $enhanced = ($enhanced)? 'enhanced' : 'noenhanced';
 
@@ -134,6 +134,7 @@ use Histograms;
   if (lc $graphics eq 'gnuplot') { # Use gnuplot
     use Gnuplot_plot;
     my $gnuplot_plot = Gnuplot_plot->new({
+					  terminal => $terminal,
 					  persist => $persist,
 					  width => $plot_width, height => $plot_height,
 					  xmin => $histograms_obj->lo_limit, xmax => $histograms_obj->hi_limit,
@@ -189,18 +190,32 @@ use Histograms;
     binmode $fhout;
     print $fhout $gd_plot->image->png;
     close $fhout;
-
-    if ($interactive) {
-      #####  modify plot in response to keyboard commands: #####
-      while (1) {		# loop to handle interactive commands.
-	my $commands_string = <STDIN>; # command and optionally a parameter, e.g. 'x:0.8'
-	my $done = $gd_plot->handle_interactive_command($commands_string);
-	last if($done);
-      }
-    }
-    } else {
-      die "Graphics option $graphics is unknown. Accepted options are 'gnuplot' and 'gd'\n";
-    }
-    print "Exiting histogram.pl\n";
+ #    print STDERR "AAA\n";
+#     my $viewer_process_id = undef;
+#     if ( !defined ($viewer_process_id = fork()) ) {
+#       die "fork failed.\n";
+#     } elsif ($viewer_process_id == 0) {
+#       my $viewer_command = " feh $output_filename ";
+#        print STDERR "A about to run feh in child process. command: $viewer_command \n";
+#     exec (" $viewer_command "); # display the png file
+#     } else {
+#       if ($interactive) { # interactive mode not implemented for GD graphics
+# #	my $viewer_process_id = `feh $output_filename &`;
+# 	print STDERR "BBB\n";
+# 	$gd_plot->viewer_process_id($viewer_process_id);
+# 	#####  modify plot in response to keyboard commands: #####
+# 	while (1) {		# loop to handle interactive commands.
+# 	  print STDERR "waiting for input to control plotting.\n";
+# 	  my $commands_string = <STDIN>; # command and optionally a parameter, e.g. 'x:0.8'
+# 	  print STDERR "(GD:) $commands_string\n";
+# 	  my $done = $gd_plot->handle_interactive_command($commands_string);
+# 	  last if($done);
+# 	}
+#       }
+#     }
+  } else {
+    die "Graphics option $graphics is unknown. Accepted options are 'gnuplot' and 'gd'\n";
   }
-  ###########  end of main  ##############
+  print "Exiting histogram.pl\n";
+}
+###########  end of main  ##############
