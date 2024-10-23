@@ -110,6 +110,15 @@ sub draw_vline{
   }
 }
 
+sub draw_line{
+  my $self = shift;
+  my ($x1, $y1) = @{( shift )}; # [x, y] array ref.
+  my ($x2, $y2) = @{( shift )};
+  my $gnuplotIF = $self->gnuplotIF;
+  #$gnuplotIF->gnuplot_cmd("unset arrow");
+  $gnuplotIF->gnuplot_cmd("set arrow nohead from $x1, $y1 to $x2, $y2  lw 1 dt 2");
+}
+
 sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4 or xmax:0.2;ymax:2000q
   my $self = shift;
   my $histograms_obj = $self->histograms;

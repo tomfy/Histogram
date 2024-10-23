@@ -12,7 +12,7 @@ use POSIX qw ( floor ceil );
 has histograms => (
 		   isa => 'Object',
 		   is => 'rw',
-		   required => 1,
+		   required => 0,
 		  );
 
 has width => (
