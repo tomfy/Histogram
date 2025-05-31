@@ -77,6 +77,13 @@ sub draw_histograms{
   my $histograms_obj = $self->histograms;
   my $gnuplotIF = $self->gnuplotIF;
 
+  # my $terminal_command = "set terminal " . $self->terminal . " noenhanced " .
+  #   " linewidth " . $self->line_width . " size " . $self->width . ", " . $self->height;
+  
+  # $gnuplotIF->gnuplot_cmd($terminal_command);
+
+  #$self->load_terminal_parameters(); # 
+  
   $gnuplotIF->gnuplot_set_xrange($histograms_obj->lo_limit, $histograms_obj->hi_limit);
   my $bin_centers = $histograms_obj->filecol_hdata()->{pooled}->bin_centers();
   my @plot_titles = ();
@@ -119,6 +126,14 @@ sub draw_line{
   $gnuplotIF->gnuplot_cmd("set arrow nohead from $x1, $y1 to $x2, $y2  lw 1 dt 2");
 }
 
+# sub load_terminal_parameters{ # set terminal parameters to those specified in the Gnuplot_pm obj.
+#   my $self = shift;
+#   my $terminal_command = "set terminal " . $self->terminal . " noenhanced " .
+#     " linewidth " . $self->line_width . " size " . $self->width . ", " . $self->height;
+#   print "terminal command: $terminal_command \n";
+#   $self->gnuplotIF->gnuplot_cmd($terminal_command); 
+# }
+
 sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4 or xmax:0.2;ymax:2000q
   my $self = shift;
   my $histograms_obj = $self->histograms;
@@ -131,6 +146,8 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
   my $ymin_log = $self->ymin_log();
   my $ymax_log = $self->ymax_log();
   my $line_width = $self->line_width();
+  my $width = $self->width();
+  my $height = $self->height();
 
   $commands_string =~ s/\s+$//g; # delete whitespace
   return 1 if($commands_string eq 'q');
@@ -183,6 +200,12 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
 	  $gnuplotIF->gnuplot_set_yrange($ymin_log, $ymax_log);
 	  # $self->ymin_log($ymin_log);
 	}
+      # }elsif ($cmd eq 'width'){
+      # 	print "Setting plot width to $param pixels.\n";
+      # 	$self->width($param);
+      # }elsif ($cmd eq 'height'){
+      # 	print "Setting plot height to $param pixels.\n";
+      # 	$self->height($param);
       } elsif ($cmd eq 'key') { # move the key (options are left, right, top, bottom)
 	my $new_key_position = $param // 'left'; #
 	$new_key_position =~ s/,/ /; # so can use e.g. left,bottom to move both horiz. vert. at once
@@ -192,13 +215,14 @@ sub handle_interactive_command{ # handle 1 line of interactive command, e.g. r:4
 	$param =~ s/\s+$//;
 	$param =~ s/^([^'])/'$1/;
 	$param =~ s/([^']\s*)$/$1'/;
-	print STDERR "param: $param \n";
+ 
 	$gnuplotIF->gnuplot_cmd("set xlabel $param");
       } elsif ($cmd eq 'export') {
 	$param =~ s/'//g; # the name of the file to export to; the format will be png, and '.png' will be added to filename
-
-	$gnuplotIF->gnuplot_hardcopy($param, " png linewidth $line_width");
+	# print STDERR "width, height: $width  $height \n";
+	$gnuplotIF->gnuplot_hardcopy($param, " png linewidth $line_width  size $width,$height");
 	# plot_the_plot_gnuplot($histograms_obj, $gnuplotIF, $vline_position);
+	
 	$self->draw_histograms();
 	$self->draw_vline();
 	$gnuplotIF->gnuplot_restore_terminal();
